@@ -9,12 +9,13 @@ b) Elias S. Helou
 Contributors:
 
 c) Rafael F.C Vescovi
-d) João Carlos Cerqueira
+d) Camila de Lima
+e) João Carlos Cerqueira
 
 -----------------------------------------------------
 Install:
 
-sudo python setup.py install
+sudo -E python setup.py install
 
 Uninstall
 
