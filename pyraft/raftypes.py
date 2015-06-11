@@ -227,8 +227,11 @@ class image( numpy.ndarray ):
          if kwargs:
             raise TypeError( 'Unhandled arguments!' )
 
-         # In here, shape is actually a pyraft.image:
-         obj = numpy.asarray( shape ).view( subtype )
+         ## In here, shape is actually a pyraft.image:
+         #obj = numpy.asarray( shape ).view( subtype )
+         # TODO: No view, make a copy! But there must be a neater way...
+         obj = numpy.ndarray.__new__( subtype, shape.shape, **kwargs )
+         obj[ ... ] = shape[ ... ]
 
       else:
 
@@ -247,7 +250,10 @@ class image( numpy.ndarray ):
                raise TypeError( 'Unhandled arguments!' )
 
             # In here, shape is actually a numpy.ndarray:
-            obj = numpy.asarray( shape ).view( subtype )
+            #obj = numpy.asarray( shape ).view( subtype )
+            # TODO: No view, make a copy! But there must be a neater way...
+            obj = numpy.ndarray.__new__( subtype, shape.shape, **kwargs )
+            obj[ ... ] = shape[ ... ]
 
          # We must create a zero array:
          else:
@@ -282,6 +288,29 @@ class image( numpy.ndarray ):
       self.bottom_right = getattr( obj, 'bottom_right', None )
       self.sampling_distances = getattr( obj, 'sampling_distances', None )
 
+   def __reduce__( self ):
+
+      # Initial state is only ndarray state:
+      full_state = list( numpy.ndarray.__reduce__( self ) )
+
+      #Further attributes:
+      image_state = ( self.top_left, self.bottom_right, self.sampling_distances )
+
+      # Add image attributes:
+      full_state[ 2 ] = ( full_state[ 2 ], image_state )
+
+      return tuple( full_state )
+
+   def __setstate__( self, state ):
+
+      # Call superclass' __setstate__:
+      numpy.ndarray.__setstate__( self, state[ 0 ] )
+
+      # Set our own state:
+      self.top_left = state[ 1 ][ 0 ]
+      self.bottom_right = state[ 1 ][ 1 ]
+      self.sampling_distances = state[ 1 ][ 2 ]
+
    def sample_coordinates( self, idx ):
       """ Returns coordinates of sample """
       return ( self.top_left[ 0 ] + idx[ 1 ] * self.sampling_distances[ 0 ], self.top_left[ 1 ] + idx[ 0 ] * self.sampling_distances[ 1 ] )
@@ -297,7 +326,6 @@ class image( numpy.ndarray ):
    # Extent:
    def extent( self ):
       return ( self.top_left[ 0 ], self.bottom_right[ 0 ], self.bottom_right[ 1 ], self.top_left[ 1 ] )
-
 
 ##############
 #|  pyraft  |#

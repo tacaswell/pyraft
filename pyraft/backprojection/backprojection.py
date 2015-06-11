@@ -102,3 +102,84 @@ def back_gpu(*args):
     return img_final
 
 
+##############
+# |  pyraft  |#
+# | function |#
+##############
+
+
+def back_fourier_slice( sino, shape=(512,512), **kwargs ): 
+
+   # Create pyraft.img to hold backprojection:
+   img = image(shape, **kwargs)
+ 
+   ####
+
+   sino_zp_factor = 1.5
+   nfft_zp_factor = 1.2 
+   nfft_m = 2
+
+   # Padded sinogram size (make it even):
+   sino_padded_size = int( math.ceil( sino_zp_factor * sino.shape[ 0 ] ) )
+   sino_padding_size = sino_padded_size - sino.shape[ 0 ]
+
+   # Fourier radii of FFT irregular samples:
+   rhos = numpy.reshape( numpy.fft.fftfreq( sino_padded_size ), ( sino_padded_size, 1 ) )
+   # Angular positions of irregular samples:
+   thetas = numpy.linspace( sino.top_left[ 0 ], sino.bottom_right[ 0 ], sino.shape[ 1 ] )
+   # Trigonometric values:
+   trig_vals = numpy.reshape(
+      numpy.transpose(
+         numpy.array( [ numpy.sin( thetas ), -numpy.cos( thetas ) ] )
+         ),
+      ( 1, thetas.shape[ 0 ] * 2 )
+      )
+   # Finally, desired irregular samples:
+   sample_positions = numpy.reshape( rhos * trig_vals, ( thetas.shape[ 0 ] * rhos.shape[ 0 ], 2 ) )
+
+   # Computations later required to remove padding.
+   delta = sino_padding_size / 2
+   extra = sino_padding_size % 2
+   odd_sino = sino.shape[ 0 ] % 2
+
+   # Plan nonuniform FFT:
+   plan = nf.NFFT(
+      d = 2,
+      N = img.shape,
+      M = sample_positions.shape[ 0 ],
+      flags = ( 'PRE_PHI_HUT', 'PRE_PSI' ),
+      n = [ i * nfft_zp_factor for i in img.shape  ],
+      m = nfft_m
+      )
+   plan.x = sample_positions
+   plan.precompute()
+
+   """
+   Compute backprojection through projection-slice theorem
+   """
+
+   # Zero-pad sinogram:
+   fsino = numpy.zeros( ( sino_padded_size, sino.shape[ 1 ] ) )
+   fsino[ delta + odd_sino : fsino.shape[ 0 ] - delta - extra + odd_sino ] = sino
+
+   # Shift sinogram columns:
+   fsino = numpy.fft.fftshift( fsino, axes = ( 0, ) )
+
+   # Fourier transform of projections:
+   fsino = numpy.fft.fft( fsino, axis = 0 )
+
+   # Dissasemble transformed sinogram:
+   plan.f = numpy.reshape( fsino, ( fsino.shape[ 0 ] * fsino.shape[ 1 ], 1 ) )
+
+   # Compute adjoint of nouniform Fourier transform:
+   result = plan.adjoint()
+
+   # Get real part:
+   result = numpy.real( result )
+
+   # Normalize:
+   result /= ( 0.5 * ( sino_padded_size - 1 ) * ( img.shape[ 1 ] - 1 ) )
+
+   return image( result, top_left = img.top_left, bottom_right = img.bottom_right )
+
+
