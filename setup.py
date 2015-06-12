@@ -15,7 +15,7 @@ import numpy
 install_requires = [
             'numpy>=1.8.0',
             'scipy>=0.14.0',
-            'h5py>=2.0'
+            'h5py>=2.0',
 	    'pynfft>=1.3.2'
             ]
 
