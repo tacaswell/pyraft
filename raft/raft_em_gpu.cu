@@ -1,82 +1,109 @@
-#include "raft_backprojection_gpu.h"
-#include "raft_radon_gpu.h"
+#include "raft_backprojection_gpu_function.h"
+#include "raft_radon_gpu_function.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#define PI 3.141592
-#define INIC -1.0
 
-#define TPBXb 32
-#define TPBYb 32
+#define THREADS_BLOCK_EM 256
 
-#define TPBXr 16
-#define TPBYr 16
+extern "C" {
+__global__ void gpu_mtx_elementwise_div(float* output, float* input1, float* input2, int dim){
+	
+	int k = blockIdx.x * blockDim.x + threadIdx.x;
+	
+	if((k<dim))
+		output[k] = input1[k]/input2[k];
 
+	return;
+
+}
+}
+
+extern "C" {
+__global__ void gpu_mtx_elementwise_mult(float* output, float* input1, float* input2, int dim){
+	
+	int k = blockIdx.x * blockDim.x + threadIdx.x;
+	
+	if(k<dim)
+		output[k] = input1[k]*input2[k];
+
+	return;
+
+}
+}
+
+extern "C" {
+void mtx_elementwise_div(float* output, float* input1, float* input2, int dim){
+	int TPB = (int)THREADS_BLOCK_EM;
+	int grid;
+	grid = (int) ceil(	(float)dim/(float)TPB	);
+	gpu_mtx_elementwise_div<<< grid, TPB >>>(output, input1, input2, dim);
+}
+}
+
+extern "C" {
+void mtx_elementwise_mult(float* output, float* input1, float* input2, int dim){
+	int TPB = (int)THREADS_BLOCK_EM;
+	int grid;
+	grid = (int) ceil(	(float)dim/(float)TPB	);
+	gpu_mtx_elementwise_mult<<< grid, TPB >>>(output, input1, input2, dim);
+}
+}
 
 extern "C" {
 void raft_em_gpu(float *output, float *sino, int sizeImage, int nrays, int nangles, int niter){
-	int i, k;
-	float avg;
+	int i, nit;	
+	
+	int SinoMem = sizeof(float)*nrays*nangles;
+	int ImageMem = sizeof(float)*sizeImage*sizeImage;	
 
-	float *sino_ones, *img_ones, *it_image1, *it_image2, *it_sino1, *it_sino2;
-	div_t D;
-	int angle, ray;
-	float t;
+	float *d_image1, *d_image2, *d_image3, *d_sino1, *d_sino2, *d_Sino;
+	float *h_sino_ones, *d_bp_ones;
+	float *img_inicial;
 
-	it_image1	= (float *)malloc(sizeImage*sizeImage*sizeof(float));
-	it_image2	= (float *)malloc(sizeImage*sizeImage*sizeof(float));
-	it_sino1	= (float *)malloc(nrays*nangles*sizeof(float));
-	it_sino2	= (float *)malloc(nrays*nangles*sizeof(float));
+	//	SET CUDA LINEAR MEMORY
+	cudaMalloc(&d_sino1, SinoMem);
+	cudaMalloc(&d_sino2, SinoMem);	
+	cudaMalloc(&d_Sino, SinoMem);	
+	cudaMalloc(&d_image1, ImageMem);
+	cudaMalloc(&d_image2, ImageMem);
+	cudaMalloc(&d_image3, ImageMem);
+	cudaMalloc(&d_bp_ones, ImageMem);
 
-	///// BACKPROJECTION OF ONES/////
-	img_ones	= (float *)malloc(sizeImage*sizeImage*sizeof(float));
-	sino_ones	= (float *)malloc(nrays*nangles*sizeof(float));
+	
+	//	Imagem inicial (provisório)
+	img_inicial	= (float *)malloc(ImageMem);
+	for (i = 0; i < (sizeImage*sizeImage); i++)		
+		img_inicial[i] = 1.0;
 
-	for(i = 0; i < (nrays*nangles); i++) 	sino_ones[i] = 10;
+	cudaMemcpy(d_image1, img_inicial, ImageMem, cudaMemcpyHostToDevice);
+	free(img_inicial);
 
-	raft_backprojection_slantstack_gpu(img_ones, sino_ones, sizeImage, nrays, nangles);
+	// Sinogram of ones
+	h_sino_ones = (float *)malloc(SinoMem);
+	for(i = 0; i < (nrays*nangles); i++)
+		h_sino_ones[i] = 1;
 
-	free(sino_ones);
-	////////////////////////////////
-	avg = 0;
-	for(i=0;i<(nrays*nangles); i++){
-		avg +=sino[i];
-	}
-	avg = avg/(nrays*nangles);
-
-	//// INITIAL IMAGE//////////////
-	for (i = 0; i < (sizeImage*sizeImage); i++)		it_image1[i] = avg+1;
-	///////////////////////////////
-
-for(k = 0; k < niter ; k++){
+	cudaMemcpy(d_sino1, h_sino_ones, SinoMem, cudaMemcpyHostToDevice);
+	
 
 
-	raft_radon_slantstack_gpu(it_sino1, it_image1, sizeImage, nrays, nangles);
+	//	BP OF ONES and INPUT SINOGRAM COPY
+	raft_backprojection_gpu_function(d_bp_ones, d_sino1, sizeImage, nrays, nangles);
 
-	for(i = 0; i < (nrays*nangles); i++){
-		D = div(i, nrays);
-		ray = D.quot;
-		angle = D.rem;
-		t = -1.0 + ray*(2.0/(nrays-1));
+	cudaMemcpy(d_Sino, sino, SinoMem, cudaMemcpyHostToDevice);	
 
-		////if (fabs(t) > sqrt(2)/2){
-		//	it_sino2[i] = 0.0;
-		//}
-		//else{
-			if(it_sino1[i]!=0) it_sino2[i] = sino[i]/it_sino1[i];
-		//}
+	//	THE FOR LOOP
+	for(nit = 0; nit < niter; nit++){
+		raft_radon_gpu_function(d_sino1, d_image1, sizeImage, nrays, nangles);
+		mtx_elementwise_div(d_sino2, d_Sino, d_sino1, nrays*nangles);
+		raft_backprojection_gpu_function(d_image2, d_sino2, sizeImage, nrays, nangles);
+		mtx_elementwise_div(d_image3, d_image2, d_bp_ones, sizeImage*sizeImage);
+		mtx_elementwise_mult(d_image1, d_image3, d_image1, sizeImage*sizeImage);
 	}
 
+	cudaMemcpy(output , d_image1 , ImageMem , cudaMemcpyDeviceToHost);
 
-	raft_backprojection_slantstack_gpu(it_image2, it_sino2, sizeImage, nrays, nangles);
-
-	for (i = 0; i < (sizeImage*sizeImage); i++)
-		it_image1[i] = (it_image2[i]*it_image1[i]) / img_ones[i];
-
-}
-	for (i = 0; i < (sizeImage*sizeImage); i++)
-		output[i] = it_image1[sizeImage*sizeImage-i-1];
-
-	return;
+return;
 }
 }

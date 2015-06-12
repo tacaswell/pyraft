@@ -179,7 +179,6 @@ def em_gpu(*args):
         raise TypeError('Not enough arguments!')        
 
     s = args[0]
-    s = numpy.flipud(s)
     
     rays = s.shape[0]
     angles = s.shape[1]
