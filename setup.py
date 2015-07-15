@@ -54,10 +54,17 @@ def locate_cuda():
         home = os.path.dirname(os.path.dirname(nvcc))
 
     
-    cudaconfig = {'home':home, 'nvcc':nvcc,
-                  'include': pjoin(home, 'include'),
-                  'lib': pjoin(home, 'lib64' or 'lib')
-	 	  }
+    check = pjoin(home, 'lib')
+    if not os.path.exists(check):
+	cudaconfig = {'home':home, 'nvcc':nvcc,
+        	      'include': pjoin(home, 'include'),
+                      'lib': pjoin(home, 'lib64')}
+    else:
+	cudaconfig = {'home':home, 'nvcc':nvcc,
+        	      'include': pjoin(home, 'include'),
+                      'lib': pjoin(home, 'lib')}
+
+
     for k, v in cudaconfig.iteritems():
         if not os.path.exists(v):
             print ( 'The CUDA %s path could not be located in %s' % (k, v))
