@@ -43,7 +43,8 @@ def fbp_gpu(*args):
     if len(args) > 1:
         img_size = args[1]
     
-    # #
+    ##
+
     filtsino = lowpassino_fbp(s)
     filtsino_buff = numpy.frombuffer(filtsino.reshape(filtsino.shape[0]*filtsino.shape[1])).astype('float32')
     filtsino_p =  filtsino_buff.ctypes.data_as(POINTER(c_float))
@@ -53,10 +54,9 @@ def fbp_gpu(*args):
 
     t = time.time()
     libraft.raft_backprojection_slantstack_gpu(img_p, filtsino_p, img_size, rays, angles)
-    #elapsed = time.time() - t
-    #print elapsed
-
-    img_final = img.reshape([img_size,img_size]).astype('float64')
+    
+    #img_final = img.reshape([img_size,img_size]).astype('float64')
+    
     return img_final
 
 '''

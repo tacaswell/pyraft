@@ -53,9 +53,11 @@ def locate_cuda():
             return None
         home = os.path.dirname(os.path.dirname(nvcc))
 
+    
     cudaconfig = {'home':home, 'nvcc':nvcc,
                   'include': pjoin(home, 'include'),
-                  'lib64': pjoin(home, 'lib64')}
+                  'lib': pjoin(home, 'lib64' or 'lib')
+	 	  }
     for k, v in cudaconfig.iteritems():
         if not os.path.exists(v):
             print ( 'The CUDA %s path could not be located in %s' % (k, v))
@@ -85,9 +87,9 @@ else:
 if CUDA:
 	ext_raft = Extension(name='pyraft.lib.libraft',
 		             sources=list(raft_codes),
-		             library_dirs=[CUDA['lib64']],
+		             library_dirs=[CUDA['lib']],
 		             libraries=['cudart'],
-		             runtime_library_dirs=[CUDA['lib64']],
+		             runtime_library_dirs=[CUDA['lib']],
 		             extra_compile_args={'gcc': ['-pedantic','-std=c++0x'],
 		                                 'nvcc': ['-Xcompiler','-use_fast_math', '--ptxas-options=-v', '-c', '--compiler-options', '-fPIC']},
 		             extra_link_args=['-std=c++0x','-lfftw3','-lm','-lblas','-lpthread'],		

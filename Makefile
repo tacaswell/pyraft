@@ -1,4 +1,4 @@
-RUNDIR=	raft pyraft	pyraft/sinogram pyraft/phantom pyraft/backprojection pyraft/filters pyraft/inversion
+RUNDIR=	raft pyraft pyraft/sinogram pyraft/phantom pyraft/backprojection pyraft/filters pyraft/inversion pyraft/iterative
 
 all: build install
 

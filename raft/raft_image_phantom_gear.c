@@ -98,12 +98,14 @@ void raft_image_phantom_gear(raft_image image)
 	    }
 
 	  /* sample holder */
-	  
+	 
+	  /* 
 	  if ( fabs(x)<0.2 && fabs(y-2.3) < 1  )
 	    {
 	      //matrix[ i + j*N] = 0.5;
 	      raft_matrix_element(image.data, j, i) = 0.5;
 	    }
+          */
 	  	  
 	}
     }

@@ -201,7 +201,7 @@ def em_gpu(*args):
 
     libraft.raft_em_gpu(img_p, sino_p, img_size, rays, angles, niter)
     
-    img_final = img.reshape([img_size,img_size]).astype('float64')
+    #img_final = img.reshape([img_size,img_size]).astype('float64')
 
     return img_final
 
@@ -257,7 +257,7 @@ def osem(sino, shape=None, niter=5, nblocks=4, **kwargs):
       radon[i], radontransp[i] = make_fourier_slice_radon_transp(sinograma[i])
    
       alg[i] = em_fourier(sinograma[i])
-      
+
       #from ..misc import imagesc
       #imagesc(radontransp[i](sinograma[i]))
 
