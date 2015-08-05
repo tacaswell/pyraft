@@ -201,7 +201,7 @@ def em_gpu(*args):
 
     libraft.raft_em_gpu(img_p, sino_p, img_size, rays, angles, niter)
     
-    #img_final = img.reshape([img_size,img_size]).astype('float64')
+    img_final = img.reshape([img_size,img_size])
 
     return img_final
 
