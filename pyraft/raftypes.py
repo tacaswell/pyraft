@@ -16,7 +16,7 @@ nthreads = multiprocessing.cpu_count()
 libstdcpp = ctypes.CDLL( ctypes.util.find_library( "stdc++" ), mode=ctypes.RTLD_GLOBAL )
 libblas   = ctypes.CDLL( ctypes.util.find_library( "blas" ), mode=ctypes.RTLD_GLOBAL )
 libfftw3  = ctypes.CDLL( ctypes.util.find_library( "fftw3" ), mode=ctypes.RTLD_GLOBAL )
-
+libfftw3_threads  = ctypes.CDLL( ctypes.util.find_library( "fftw3_threads" ), mode=ctypes.RTLD_GLOBAL )
 
 #############
 #|  pyraft |#
@@ -134,6 +134,9 @@ libraft.raft_radon_slantstack.argtypes = [ RAFT_IMAGE, RAFT_IMAGE, ctypes.c_int 
 libraft.raft_radon_slantstack.restype = None
 libraft.raft_backprojection_slantstack.argtypes = [ RAFT_IMAGE, RAFT_IMAGE, ctypes.c_int ]
 libraft.raft_backprojection_slantstack.restype = None
+
+libraft.raft_backprojection_miqueles.argtypes = [ RAFT_IMAGE, RAFT_IMAGE, ctypes.c_int ]
+libraft.raft_backprojection_miqueles.restype = None
 
 libraft.raft_haar.argtypes = [ RAFT_MATRIX, ctypes.c_int, ctypes.c_int ]
 libraft.raft_haar.restype = None

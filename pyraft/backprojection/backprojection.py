@@ -33,17 +33,26 @@ def backprojection_with_mesh(sino, N, theta,t):
 
 def backprojection(sino, shape=(256, 256), method=radon_method.BRESENHAM, **kwargs):
    """Computes the Backprojection using one of several methods"""
-
+   
    # Create pyraft.img to hold backprojection:
    img = image(shape, **kwargs)
    IMG = make_RAFT_IMAGE(img, img.top_left, img.bottom_right)
 
    # Compute discrete Backprojection:
    SINO = make_RAFT_IMAGE(sino, sino.top_left, sino.bottom_right)
+   
    if method == radon_method.BRESENHAM:
       libraft.raft_backprojection_bresenham(SINO, IMG, ctypes.c_int(nthreads))
+         
+   elif method == radon_method.BST:
+      libraft.raft_backprojection_miqueles(SINO, IMG , ctypes.c_int(nthreads))
+   
+   elif method == radon_method.BST:
+      libraft.raft_backprojection_andersson(SINO, IMG , ctypes.c_int(nthreads))
+   
    elif method == radon_method.SLANTSTACK:
-      libraft.raft_backprojection_slantstack(SINO, IMG, ctypes.c_int(nthreads))
+      libraft.raft_backprojection_slantstack(SINO, IMG, ctypes.c_int(nthreads))   
+   
    else:
       raise TypeError('Unsupported method for Backprojection!')
    return img

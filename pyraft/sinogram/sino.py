@@ -161,7 +161,9 @@ class radon_method:
 
    BRESENHAM = 1,
    SLANTSTACK = 2,
-   HIERARCHICAL = 3
+   HIERARCHICAL = 3,
+   BST = 4,
+   ANDERSON = 5
 
 ###############
 # |  pyraft  |#

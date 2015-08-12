@@ -99,13 +99,13 @@ if CUDA:
 		             runtime_library_dirs=[CUDA['lib']],
 		             extra_compile_args={'gcc': ['-pedantic','-std=c++0x'],
 		                                 'nvcc': ['-Xcompiler','-use_fast_math', '--ptxas-options=-v', '-c', '--compiler-options', '-fPIC']},
-		             extra_link_args=['-std=c++0x','-lfftw3','-lm','-lblas','-lpthread'],		
+		             extra_link_args=['-std=c++0x','-lfftw3_threads','-lfftw3','-lm','-lblas','-lpthread'],		
 		             include_dirs = [ CUDA['include']])
 else:
 	ext_raft = Extension(name='pyraft.lib.libraft',
 		             sources=list(raft_codes),
 		             extra_compile_args={'gcc': ['-pedantic','-std=c++0x']},
-		             extra_link_args=['-std=c++0x','-lfftw3','-lm','-lblas','-lpthread'])
+		             extra_link_args=['-std=c++0x','-lfftw3_threads','-lfftw3','-lm','-lblas','-lpthread'])
 
 
 
@@ -169,7 +169,7 @@ setup(
       # since the package has c code, the egg cannot be zipped
     zip_safe=False,    
 
-    author='Eduardo Miqueles - Elias S.Helou - Rafael F.C.Vescovi',
+    author='Eduardo X. Miqueles - Elias S.Helou - Nikolay Koshev - Rafael F.C.Vescovi',
     author_email='eduardo.miqueles@lnls.br',
     
     description='Reconstructions Algorithms For Tomography',

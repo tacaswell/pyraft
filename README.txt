@@ -3,14 +3,16 @@ RECONSTRUCTION ALGORITHMS FOR TOMOGRAPHY for Python
 
 Authors:
 
-a) Eduardo X. Miqueles
-b) Elias S. Helou
+a) Eduardo X. Miqueles		LNLS/CNPEM
+b) Elias S. Helou		ICMC/USP
+c) Nikolay Koshev		LNLS/CNPEM
 
 Contributors:
 
-c) Rafael F.C Vescovi
-d) Camila de Lima
-e) João Carlos Cerqueira
+- Rafael F.C Vescovi		LNLS/CNPEM
+- João Carlos Cerqueira		FEEC/UNICAMP
+- Hugo H. Slepicka			BNL
+
 
 -----------------------------------------------------
 Install:
