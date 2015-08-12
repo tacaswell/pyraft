@@ -138,6 +138,9 @@ libraft.raft_backprojection_slantstack.restype = None
 libraft.raft_backprojection_miqueles.argtypes = [ RAFT_IMAGE, RAFT_IMAGE, ctypes.c_int ]
 libraft.raft_backprojection_miqueles.restype = None
 
+libraft.raft_backprojection_andersson.argtypes = [ RAFT_IMAGE, RAFT_IMAGE, ctypes.c_int ]
+libraft.raft_backprojection_andersson.restype = None
+
 libraft.raft_haar.argtypes = [ RAFT_MATRIX, ctypes.c_int, ctypes.c_int ]
 libraft.raft_haar.restype = None
 
