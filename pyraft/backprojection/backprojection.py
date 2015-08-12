@@ -47,7 +47,7 @@ def backprojection(sino, shape=(256, 256), method=radon_method.BRESENHAM, **kwar
    elif method == radon_method.BST:
       libraft.raft_backprojection_miqueles(SINO, IMG , ctypes.c_int(nthreads))
    
-   elif method == radon_method.BST:
+   elif method == radon_method.ANDERSON:
       libraft.raft_backprojection_andersson(SINO, IMG , ctypes.c_int(nthreads))
    
    elif method == radon_method.SLANTSTACK:
