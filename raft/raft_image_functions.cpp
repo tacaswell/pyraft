@@ -253,7 +253,8 @@ raft_image zero_padding_on_s(raft_image source, int Ns)
 	if(Ns <= ns) return source;
 	
 	double ds = fabs(source.br_y - source.tl_y)/ns;
-	double s_max = source.tl_y + Ns*ds;
+
+	double s_max = std::min(source.tl_y, source.br_y) + Ns*ds;
 
 	raft_image res;
 	res.br_x = source.br_x;
@@ -261,10 +262,10 @@ raft_image zero_padding_on_s(raft_image source, int Ns)
 	res.tl_y = source.tl_y;
 	res.br_y = s_max;
 
-// 	std::cout<<"Zerro padding started:"<<std::endl;
-// 	std::cout<<"; ds="<<ds<<std::endl;;
-// 	std::cout<<"OLD size: lines="<<source.data.lines<<"; columns="<<source.data.columns<<std::endl;
-// 	std::cout<<"NEW size: lines="<<Ns<<"; columns="<<nt<<std::endl;
+	std::cout<<"Zerro padding started:"<<std::endl;
+	std::cout<<"; ds="<<ds<<std::endl;;
+	std::cout<<"OLD size: lines="<<source.data.lines<<"; columns="<<source.data.columns<<std::endl;
+	std::cout<<"NEW size: lines="<<Ns<<"; columns="<<nt<<std::endl;
 
 	res.data = raft_matrix_create(Ns, nt);
 	for(int j=0; j<ns; j++) {
@@ -1042,7 +1043,7 @@ void deconvolution_2d(raft_matrix x, raft_matrix k, raft_matrix &res, double a, 
 	int Nx = x.lines;
 	int Ny = x.columns;
 
-	//std::cout<<"deconv_2d starts: Mx="<<Nx<<"; Ny="<<Ny<<std::endl;
+	std::cout<<"deconv_2d starts: Mx="<<Nx<<"; Ny="<<Ny<<std::endl;
 	fftw_complex *x_in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*Nx*Ny);
 	fftw_complex *k_in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*Nx*Ny);
 	fftw_complex *x_out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*Nx*Ny);
@@ -1066,7 +1067,7 @@ void deconvolution_2d(raft_matrix x, raft_matrix k, raft_matrix &res, double a, 
 	}
 	fftw_execute_dft(p, x_in, x_out);
 	fftw_execute_dft(p, k_in, k_out); 
-	//std::cout<<"FFT of the kernel done"<<std::endl;
+	std::cout<<"FFT of the kernel done"<<std::endl;
 	double xr, xi, kr, ki, scale;
 	double cx, cy, d;
 	double asize = 1.0; 
@@ -1238,8 +1239,8 @@ raft_image raft_straight_kernel_lp_create(raft_image source, double acc)
 	double t  = t0;
 	double r  = r0;
 
-	//std::cout<<"Creating kernel: t0="<<t0<<"; t1="<<t1<<"; dt="<<dt<<std::endl;
-	//std::cout<<"r0="<<r0<<"; r1="<<r1<<"; dr="<<dr<<std::endl;
+	std::cout<<"Creating kernel: t0="<<t0<<"; t1="<<t1<<"; dt="<<dt<<std::endl;
+	std::cout<<"r0="<<r0<<"; r1="<<r1<<"; dr="<<dr<<std::endl;
 	for(int i=0; i<Ns; i++) {
 		for(int j=0; j<Nt; j++) {
 			double arg = (cos(pi*t/180) - exp(r))*(cos(pi*t/180) - exp(r));
@@ -1381,12 +1382,12 @@ void sp2c_miqueles(raft_image source_r, raft_image source_i,
 	std::vector< std::thread > threads;
 	threads.reserve( nthreads );
 	int cur_thread = 0;
-	//std::cout<<"ntreads="<< nthreads<<"; base_ncolumns="<<base_ncolumns<<"; remainder_ncolumns="<<remainder_ncolumns<<std::endl;
+	std::cout<<"ntreads="<< nthreads<<"; base_ncolumns="<<base_ncolumns<<"; remainder_ncolumns="<<remainder_ncolumns<<std::endl;
 	for ( ; cur_thread < nthreads; ++cur_thread )
 	{
 		double y0_cur = y0 + cur_starting_column*dy; 
 		int cur_ncolumns( base_ncolumns + ( cur_thread < remainder_ncolumns ) );
-		//std::cout<<"add thr for cur_starting_column="<<cur_starting_column<<"; cur_ncolumns="<<cur_ncolumns<<std::endl;
+		std::cout<<"add thr for cur_starting_column="<<cur_starting_column<<"; cur_ncolumns="<<cur_ncolumns<<std::endl;
 		std::thread thread =  std::thread( sp2c_miqueles_worker,
 					     source_r, 
 					     source_i, 
@@ -1520,13 +1521,13 @@ raft_image lp2c_mt(raft_image source, int Nx, int Ny, int nthreads)
 	res.data = raft_matrix_create(Ny, Nx);
 	
 	// Make sure we do not have too many or too little threads:
-	nthreads = ( nthreads <= Nt ) ? nthreads : Nt;
+	nthreads = ( nthreads <= Ny ) ? nthreads : Ny;
 	nthreads = ( nthreads > 0 ) ? nthreads : 1;
 	
 	// Base number of columns per thread:
-	int base_ncolumns( Nt/ nthreads );
+	int base_ncolumns( Ny/ nthreads );
 	// Remainder, i.e., number of threads with an extra column:
-	int remainder_ncolumns( Nt % nthreads );
+	int remainder_ncolumns( Ny % nthreads );
 	// Current starting_line for worker thread:
 	int cur_starting_column( 0 );
 
