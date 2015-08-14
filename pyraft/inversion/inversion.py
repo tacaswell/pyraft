@@ -18,8 +18,8 @@ def fbp(*args):
     N = sino.shape[0]
     
     filt_sino = lowpassino_fbp(sino)
-
-    img = backprojection(filt_sino , shape=(N, N))
+    
+    img = backprojection(filt_sino , shape=[N, N], method=radon_method.BST)
 
     return img 
 
@@ -56,7 +56,8 @@ def fbp_gpu(*args):
     libraft.raft_backprojection_slantstack_gpu(img_p, filtsino_p, img_size, rays, angles)
     
     #img_final = img.reshape([img_size,img_size]).astype('float64')
-    
+    img_final = img.reshape([img_size,img_size])	    
+
     return img_final
 
 '''
