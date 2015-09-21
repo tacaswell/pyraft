@@ -169,6 +169,8 @@ try:
     libraft.raft_radon_slantstack_gpu.restype= None  
     libraft.raft_em_gpu.argtypes = [POINTER(c_float), POINTER(c_float), c_size_t, c_size_t, c_size_t, c_size_t]   
     libraft.raft_em_gpu.restype= None  
+    libraft.raft_tr_em_gpu.argtypes = [POINTER(c_float), POINTER(c_float), POINTER(c_float), POINTER(c_float), c_size_t, c_size_t, c_size_t, c_size_t]   
+    libraft.raft_tr_em_gpu.restype= None 
 except:
     print ('No CUDA Functions!!')
 

@@ -205,6 +205,51 @@ def em_gpu(*args):
 
     return img_final
 
+###############
+# |  pyraft  |#
+# | function |#
+###############
+
+def em_transmission_gpu(*args):
+
+    if len(args) == 0:
+        raise TypeError('Not enough arguments!')        
+
+    s = args[0]
+    f = args[1]
+    d = args[2]    
+
+    rays = s.shape[0]
+    angles = s.shape[1]
+    
+    img_size = rays
+    
+    niter = 20
+    
+    if len(args) > 3:
+        img_size = args[3]
+    
+    
+    if len(args) > 4:
+        niter = args[4]
+    
+    sino_buff = numpy.frombuffer(s.reshape(s.shape[0]*s.shape[1])).astype('float32')
+    sino_p = sino_buff.ctypes.data_as(POINTER(c_float))
+    flat_buff = numpy.frombuffer(f.reshape(f.shape[0]*f.shape[1])).astype('float32')
+    flat_p = flat_buff.ctypes.data_as(POINTER(c_float))
+    dark_buff = numpy.frombuffer(d.reshape(d.shape[0]*d.shape[1])).astype('float32')
+    dark_p = dark_buff.ctypes.data_as(POINTER(c_float))
+
+    img = numpy.zeros(img_size*img_size).astype('float32')
+    img_p = img.ctypes.data_as(POINTER(c_float))
+
+    libraft.raft_tr_em_gpu(img_p, sino_p, flat_p, dark_p, img_size, rays, angles, niter)
+    
+    img_final = img.reshape([img_size,img_size]).astype('float64')
+
+    return img_final
+    
+
 
 ###############
 # |  pyraft  |#
