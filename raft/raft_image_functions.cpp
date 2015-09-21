@@ -262,10 +262,10 @@ raft_image zero_padding_on_s(raft_image source, int Ns)
 	res.tl_y = source.tl_y;
 	res.br_y = s_max;
 
-	std::cout<<"Zerro padding started:"<<std::endl;
-	std::cout<<"; ds="<<ds<<std::endl;;
-	std::cout<<"OLD size: lines="<<source.data.lines<<"; columns="<<source.data.columns<<std::endl;
-	std::cout<<"NEW size: lines="<<Ns<<"; columns="<<nt<<std::endl;
+	//std::cout<<"Zerro padding started:"<<std::endl;
+	//std::cout<<"; ds="<<ds<<std::endl;;
+	//std::cout<<"OLD size: lines="<<source.data.lines<<"; columns="<<source.data.columns<<std::endl;
+	//std::cout<<"NEW size: lines="<<Ns<<"; columns="<<nt<<std::endl;
 
 	res.data = raft_matrix_create(Ns, nt);
 	for(int j=0; j<ns; j++) {
@@ -1382,12 +1382,12 @@ void sp2c_miqueles(raft_image source_r, raft_image source_i,
 	std::vector< std::thread > threads;
 	threads.reserve( nthreads );
 	int cur_thread = 0;
-	std::cout<<"ntreads="<< nthreads<<"; base_ncolumns="<<base_ncolumns<<"; remainder_ncolumns="<<remainder_ncolumns<<std::endl;
+	//std::cout<<"ntreads="<< nthreads<<"; base_ncolumns="<<base_ncolumns<<"; remainder_ncolumns="<<remainder_ncolumns<<std::endl;
 	for ( ; cur_thread < nthreads; ++cur_thread )
 	{
 		double y0_cur = y0 + cur_starting_column*dy; 
 		int cur_ncolumns( base_ncolumns + ( cur_thread < remainder_ncolumns ) );
-		std::cout<<"add thr for cur_starting_column="<<cur_starting_column<<"; cur_ncolumns="<<cur_ncolumns<<std::endl;
+		//std::cout<<"add thr for cur_starting_column="<<cur_starting_column<<"; cur_ncolumns="<<cur_ncolumns<<std::endl;
 		std::thread thread =  std::thread( sp2c_miqueles_worker,
 					     source_r, 
 					     source_i, 
