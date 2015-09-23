@@ -48,7 +48,8 @@ inline void raft_getg_with_resources(raft_vector sigma,
 	unsigned i = 0;
 	for ( ; i < osize; ++i ) {
 // 		double factor = 1/(raft_vector_element( sigma, i ) * x_zp.size);
-		double factor = 1/(raft_vector_element( sigma, i ));
+		double mysigma = raft_vector_element(sigma, i);
+		double factor = 1.0/(mysigma);
 // 		double factor = 1/( x_zp.size);
 		p_out[ i ][ 1 ] *= factor;
 		p_out[ i ][ 0 ] *= factor;
@@ -222,6 +223,8 @@ void raft_backprojection_miqueles(raft_image sino, raft_image res_, int nthreads
 	// Interpolation to the given size Nx, Ny
 	res = bl_interpolate_mt(res, Nx, Ny, nthreads);
 	// Just set mean nearest values in center
+	
+	/*
 	int r = Ns/200;
 	for(int j=-r; j<r; j++) {
 		for(int i=-r; i<r; i++) {
@@ -229,6 +232,7 @@ void raft_backprojection_miqueles(raft_image sino, raft_image res_, int nthreads
 				raft_matrix_element(res.data, Nx/2 - r - 1, Ny/2 - r - 1);
 		}
 	}
+	*/
 
 	memcpy((double*)res_.data.p_data, (double*)res.data.p_data, sizeof(double)*Nx*Ny); 
 }
