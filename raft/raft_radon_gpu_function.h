@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-void raft_radon_gpu_function(float* d_output, float* d_input, int sizeImage, int nrays, int nangles);
+void raft_radon_gpu_function(float* d_output, float* d_input, int sizeImage, int nrays, int nangles, float expo);
 void raft_exp_radon_gpu_function(float* d_output, float* d_input, int sizeImage, int nrays, int nangles);
   
 

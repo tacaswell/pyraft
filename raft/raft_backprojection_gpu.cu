@@ -6,6 +6,10 @@
 #define PI 3.14159265358979
 #define INIC -1.0
 
+/*
+Autor: Joao Carlos Cerqueira	email: jc.cerqueira13@gmail.com
+*/
+
 extern "C" {
 void raft_backprojection_slantstack_gpu(float *image, float *sino, int sizeImage, int nrays, int nangles){
 
@@ -26,6 +30,7 @@ void raft_backprojection_slantstack_gpu(float *image, float *sino, int sizeImage
 	cudaMemcpy (image , d_output , sizeImage*sizeImage*sizeof(float) , cudaMemcpyDeviceToHost);
 
 	cudaFree(d_output);
+	cudaFree(d_input);
 	cudaDeviceReset();
 }
 }

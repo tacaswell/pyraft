@@ -7,7 +7,6 @@ extern "C" {
 #endif
 
 void raft_backprojection_miqueles(raft_image, raft_image, int);
-
 #ifdef __cplusplus
 }
 #endif

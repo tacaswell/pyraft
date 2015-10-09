@@ -7,18 +7,8 @@
 #include <thread>
 #include <string.h>
 
-////////////////////// polar.cp:
-void to_pos(raft_matrix &x)
-{
-	int N1 = x.lines;
-	int N2 = x.columns;
-	for(int i=0; i<N1; i++) {
-		for(int j=0; j<N2; j++) {
-			raft_matrix_element(x, i, j) = fabs(raft_matrix_element(x, i, j));	
-		}
-	}
-}
-
+#include <boost/math/special_functions/bessel.hpp>
+		
 ////////////////////// Getting the HG ////////////////////////
 extern "C" {
 
@@ -28,6 +18,7 @@ void dcopy_( int const *, double const *, int const *, double *, int const * );
 }
 
 inline void raft_getg_with_resources(raft_vector sigma, 
+				raft_vector w,
 				raft_vector x, 
 				fftw_complex *p_out, 
 				raft_vector x_zp, 
@@ -36,34 +27,29 @@ inline void raft_getg_with_resources(raft_vector sigma,
 				fftw_plan plan) 
 {
 	// Copy data to zero-padded vector:
-	dcopy_( &(x.size), x.p_data, &(x.stride), x_zp.p_data, &(x_zp.stride) );
-	for ( int i( x.size ); i < x_zp.size; ++i  )
-		raft_vector_element( x_zp, i ) = 0.0;
+	for ( int i( 0 ); i < x_zp.size; ++i  ) {
+		raft_vector_element( x_zp, i ) = (i<x.size) ? raft_vector_element(x, i)*raft_vector_element(w, i) : 0.0;
+	}
 
 	// Excecutes FFT:
 	fftw_execute_dft_r2c( plan, x_zp.p_data, p_out );
 
 	// Filtering in the Fourier domain:
 	unsigned osize =  x.size / 2 + 1;
-	unsigned i = 0;
-	for ( ; i < osize; ++i ) {
-// 		double factor = 1/(raft_vector_element( sigma, i ) * x_zp.size);
-		double mysigma = raft_vector_element(sigma, i);
-		double factor = 1.0/(mysigma);
-// 		double factor = 1/( x_zp.size);
-		p_out[ i ][ 1 ] *= factor;
-		p_out[ i ][ 0 ] *= factor;
-	}
 
 	// Copy back to r_r and r_i:
 	for(int i=0; i<osize; i++)
 	{
-		raft_vector_element(r_r, i) = p_out[i][0];
-		raft_vector_element(r_i, i) = p_out[i][1];
+		double factor = 1.0/(raft_vector_element( sigma, i ));
+		raft_vector_element(r_r, i) = p_out[i][0]*factor;
+		raft_vector_element(r_i, i) = p_out[i][1]*factor;
+// 		raft_vector_element(r_r, i) = p_out[i][0];
+// 		raft_vector_element(r_i, i) = p_out[i][1];
 	}
 }
 
 void raft_getg_worker( raft_vector   		sigma,
+				raft_vector 	w,
 				raft_matrix    	mat,
 				raft_matrix	mat_out_r,
 				raft_matrix	mat_out_i,
@@ -76,6 +62,7 @@ void raft_getg_worker( raft_vector   		sigma,
 	int cur_column = starting_column;
 	for ( ; cur_column < end_column; ++cur_column )
 		raft_getg_with_resources( sigma,
+						w,
 					    raft_matrix_get_column( mat, cur_column ),
 					    p_out,
 					    x_zp,
@@ -86,6 +73,7 @@ void raft_getg_worker( raft_vector   		sigma,
 }
 
 void raft_getg( raft_vector sigma,
+		raft_vector w,
 			raft_matrix data,
 			raft_matrix &rmap_r, 
 			raft_matrix &rmap_i,
@@ -138,6 +126,7 @@ void raft_getg( raft_vector sigma,
 		int cur_ncolumns( base_ncolumns + ( cur_thread < remainder_ncolumns ) );
 		std::thread thread =  std::thread( raft_getg_worker,
 					      sigma,
+					      w,
 					      data,
 					      rmap_r, 
 					      rmap_i,
@@ -166,12 +155,9 @@ void raft_getg( raft_vector sigma,
 void get_hg_ramp(raft_image sino, raft_matrix &rmap_r, raft_matrix &rmap_i, int nthreads)
 {
 	int Ns = sino.data.lines;
-	double ds = 1.0/Ns;
 	raft_vector sigma = raft_vector_create(sino.data.lines / 2 + 1);
-// 	double sigma_0 = sino.tl_y;
-// 	double sigma_1 = sino.br_y/(2*pi);
 	double sigma_0 = 0;
-	double sigma_1 = 1.0/(2*ds); 
+	double sigma_1 = std::max(sino.tl_y, sino.br_y);
 
 	double d_sigma = sigma_1/Ns; 
 
@@ -181,29 +167,41 @@ void get_hg_ramp(raft_image sino, raft_matrix &rmap_r, raft_matrix &rmap_i, int 
 		raft_vector_element(sigma, i) = s; 
 	}
 
-	raft_getg(sigma, sino.data, rmap_r, rmap_i, nthreads);
+
+	//window
+	raft_vector w = raft_vector_create(Ns);
+	double beta = 1.8;
+	for(int i =0; i<Ns; i++ ) {
+		double arg_bessel = beta*sqrt(1 - ((2*i - Ns + 1)/(Ns - 1))*((2*i - Ns + 1)/(Ns - 1)));
+		double b1 = boost::math::cyl_bessel_i(0, arg_bessel);
+		double b2 = boost::math::cyl_bessel_i(0, beta);
+		raft_vector_element(w, i) = fabs(b1)/fabs(b2);
+
+// 		raft_vector_element(w, i) = 1.0;
+	}
+
+	raft_getg(sigma, w, sino.data, rmap_r, rmap_i, nthreads);
 	raft_vector_destroy(&sigma);
 }
+
 
 //////////////////////// Backprojection function //////////////////////////////
 void raft_backprojection_miqueles(raft_image sino, raft_image res_, int nthreads)
 {
+	// Prepare the data - subtracting mean
+
+	raft_image tmp, res;
 	int Nx = res_.data.columns;
 	int Ny = res_.data.lines;
 	// Transform from sinogram coordinates to semi-polar
-	int Nt = sino.data.columns;
-	int Ns = sino.data.lines;
-	//std::cout<<"ORIG: Nt="<<Nt<<"; Ns="<<Ns<<std::endl;
-	raft_image res = sino2sp(sino);
+	res = sino2sp(sino);
 	// The smallest errors occurs when we are using square matrixes
+	int Nt = res.data.columns;
+	int Ns = std::max(2*res.data.lines, res.data.columns);
+	int old_Ns = res.data.lines;
+	res = zero_padding_on_s(res, Ns);
 	Nt = res.data.columns;
 	Ns = res.data.lines;
-	//std::cout<<"SP: Nt="<<Nt<<"; Ns="<<Ns<<std::endl;
-	Ns = std::max(Nt, res.data.lines);
-	res = zero_padding_on_s(res, 2*Ns);
-	Nt = res.data.columns;
-	Ns = res.data.lines;
-	//std::cout<<"SP ZP: Nt="<<Nt<<"; Ns="<<Ns<<std::endl;
 	// Initializing the arrays for Fourier image
 	raft_image res_r = res;
 	raft_image res_i = res;
@@ -211,30 +209,29 @@ void raft_backprojection_miqueles(raft_image sino, raft_image res_, int nthreads
 	get_hg_ramp(res, res_r.data, res_i.data, nthreads);
 	// Transforming the frequency domain to Cartezian coordinates
 	raft_image tmp_r, tmp_i;
-	sp2c_miqueles(res_r, res_i, tmp_r, tmp_i, Nx, Ny, nthreads);
+
+	sp2c_miqueles(res_r, res_i, tmp_r, tmp_i, Ns, Ns, nthreads);
 	// doing the 2D inverse FFT to obtain the result  
 	ifftw_2d(tmp_r.data, tmp_i.data, nthreads);
 	res = tmp_r;
 	// Shifting
 	fft_shift_2d(res.data);
 	// Some postprocessing...
-	// Mirroring to positive only values
-	to_pos(res.data);
 	// Interpolation to the given size Nx, Ny
-	res = bl_interpolate_mt(res, Nx, Ny, nthreads);
-	// Just set mean nearest values in center
 	
-	/*
-	int r = Ns/200;
-	for(int j=-r; j<r; j++) {
-		for(int i=-r; i<r; i++) {
-			raft_matrix_element(res.data, Nx/2 + j, Ny/2+i) = 
-				raft_matrix_element(res.data, Nx/2 - r - 1, Ny/2 - r - 1);
-		}
-	}
-	*/
-
-	memcpy((double*)res_.data.p_data, (double*)res.data.p_data, sizeof(double)*Nx*Ny); 
+	double a = 2*(double)old_Ns/Ns;
+	std::cout<<"a="<<a<<std::endl;
+	double old_tl_x = res.tl_x;	
+	double old_tl_y = res.tl_y;	
+	double old_br_x = res.br_x;	
+	double old_br_y = res.br_y;
+	res = cut(res, a*old_tl_x, a*old_br_x, a*old_br_y, a*old_tl_y);
+	raft_image_normalize(res);
+	res = bl_interpolate_mt(res, Nx, Ny, nthreads);
+	memcpy((double*)res_.data.p_data, (double*)res.data.p_data, sizeof(double)*Nx*Ny);
+	raft_image_destroy(&res);
+	raft_image_destroy(&tmp_r);
+	raft_image_destroy(&tmp_i);
 }
 
 

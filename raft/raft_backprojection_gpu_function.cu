@@ -8,6 +8,10 @@
 #define TPBXb 32
 #define TPBYb 32
 
+/*
+Autor: Joao Carlos Cerqueira	email: jc.cerqueira13@gmail.com
+*/
+
 texture<float, cudaTextureType2D, cudaReadModeElementType> texSino;
 
 
@@ -36,29 +40,25 @@ __global__ void raft_backprojection_gpu_kernel(float *image, int wdI, int nrays,
 		  x = (float)INIC + i * delta;
 		  y = (float)INIC + j * delta;
 	      t = x*cosk + y*sink;
-	      T = (float)((t + 1)/dt);
-	      //if(T >= 0 && T <= (nrays-1))
+	      T = (float)((t + 1)/dt);	     
 		  	  cs1 = cs1 + tex2D(texSino, k + 0.5f, T + 0.5f);
 		  //////////////////////////
 		  x = (float)INIC + (i+1) * delta;
 		  y = (float)INIC + j * delta;
 	      t = x*cosk + y*sink;
 	      T = (float)((t + 1)/dt);
-	      //if(T >= 0 && T <= (nrays-1))
 		  	  cs2 = cs2 + tex2D(texSino, k + 0.5f, T + 0.5f);
 		  //////////////////////////
 		  x = (float)INIC + i * delta;
 		  y = (float)INIC + (j+1) * delta;
 	      t = x*cosk + y*sink;
 	      T = (float)((t + 1)/dt);
-	      //if(T >= 0 && T <= (nrays-1))
 		  	  cs3 = cs3 + tex2D(texSino, k + 0.5f, T + 0.5f);
 		  //////////////////////////
 		  x = (float)INIC + (i+1) * delta;
 		  y = (float)INIC + (j+1) * delta;
 	      t = x*cosk + y*sink;
 	      T = (float)((t + 1)/dt);
-	      //if(T >= 0 && T <= (nrays-1))
 		  	  cs4 = cs4 + tex2D(texSino, k + 0.5f, T + 0.5f);
 	  }
 
@@ -108,5 +108,8 @@ void raft_backprojection_gpu_function(float *d_output, float *d_input, int sizeI
 
     cudaUnbindTexture(texSino);
     cudaFreeArray(cuArray);
+	
+    return;
 }
 }
+

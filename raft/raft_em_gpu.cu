@@ -1,3 +1,4 @@
+#include "raft_cuda_aux.h"
 #include "raft_backprojection_gpu_function.h"
 #include "raft_radon_gpu_function.h"
 #include <stdio.h>
@@ -6,49 +7,14 @@
 
 #define THREADS_BLOCK_EM 256
 
-extern "C" {
-__global__ void gpu_mtx_elementwise_div(float* output, float* input1, float* input2, int dim){
-	
-	int k = blockIdx.x * blockDim.x + threadIdx.x;
-	
-	if((k<dim))
-		output[k] = input1[k]/input2[k];
+/*Autor: Joao Carlos Cerqueira	email: jc.cerqueira13@gmail.com
 
-	return;
+A funcao 'void raft_em_gpu' implementa o metodo de reconstrucao iterativo
+EM, onde 'niter' eh o numero de iteracoes. Este metodo de reconstrucao é
+limitado a tomografias baseadas em emissao. Para inversoes de tomografias
+baseadas em transmissao, utilize a funcao 'void raft_tr_em_gpu'
+*/
 
-}
-}
-
-extern "C" {
-__global__ void gpu_mtx_elementwise_mult(float* output, float* input1, float* input2, int dim){
-	
-	int k = blockIdx.x * blockDim.x + threadIdx.x;
-	
-	if(k<dim)
-		output[k] = input1[k]*input2[k];
-
-	return;
-
-}
-}
-
-extern "C" {
-void mtx_elementwise_div(float* output, float* input1, float* input2, int dim){
-	int TPB = (int)THREADS_BLOCK_EM;
-	int grid;
-	grid = (int) ceil(	(float)dim/(float)TPB	);
-	gpu_mtx_elementwise_div<<< grid, TPB >>>(output, input1, input2, dim);
-}
-}
-
-extern "C" {
-void mtx_elementwise_mult(float* output, float* input1, float* input2, int dim){
-	int TPB = (int)THREADS_BLOCK_EM;
-	int grid;
-	grid = (int) ceil(	(float)dim/(float)TPB	);
-	gpu_mtx_elementwise_mult<<< grid, TPB >>>(output, input1, input2, dim);
-}
-}
 
 extern "C" {
 void raft_em_gpu(float *output, float *sino, int sizeImage, int nrays, int nangles, int niter){
@@ -60,7 +26,8 @@ void raft_em_gpu(float *output, float *sino, int sizeImage, int nrays, int nangl
 	float *d_image1, *d_image2, *d_image3, *d_sino1, *d_sino2, *d_Sino;
 	float *h_sino_ones, *d_bp_ones;
 	float *img_inicial;
-
+	
+	
 	//	SET CUDA LINEAR MEMORY
 	cudaMalloc(&d_sino1, SinoMem);
 	cudaMalloc(&d_sino2, SinoMem);	
@@ -77,7 +44,6 @@ void raft_em_gpu(float *output, float *sino, int sizeImage, int nrays, int nangl
 		img_inicial[i] = 1.0;
 
 	cudaMemcpy(d_image1, img_inicial, ImageMem, cudaMemcpyHostToDevice);
-	free(img_inicial);
 
 	// Sinogram of ones
 	h_sino_ones = (float *)malloc(SinoMem);
@@ -95,7 +61,7 @@ void raft_em_gpu(float *output, float *sino, int sizeImage, int nrays, int nangl
 
 	//	THE FOR LOOP
 	for(nit = 0; nit < niter; nit++){
-		raft_radon_gpu_function(d_sino1, d_image1, sizeImage, nrays, nangles);
+		raft_radon_gpu_function(d_sino1, d_image1, sizeImage, nrays, nangles, 0.0);
 		mtx_elementwise_div(d_sino2, d_Sino, d_sino1, nrays*nangles);
 		raft_backprojection_gpu_function(d_image2, d_sino2, sizeImage, nrays, nangles);
 		mtx_elementwise_div(d_image3, d_image2, d_bp_ones, sizeImage*sizeImage);
@@ -104,6 +70,19 @@ void raft_em_gpu(float *output, float *sino, int sizeImage, int nrays, int nangl
 
 	cudaMemcpy(output , d_image1 , ImageMem , cudaMemcpyDeviceToHost);
 
-return;
+	
+	cudaFree(d_image1);
+	cudaFree(d_image2);
+	cudaFree(d_image3);
+	cudaFree(d_sino1);
+	cudaFree(d_sino2);
+	cudaFree(d_Sino);
+	cudaFree(d_bp_ones);
+
+	
+	free(img_inicial);
+	free(h_sino_ones);
+
+	return;
 }
 }

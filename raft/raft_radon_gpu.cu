@@ -8,6 +8,10 @@
 
 #define INIC -1.0
 
+/*
+Autor: Joao Carlos Cerqueira	email: jc.cerqueira13@gmail.com
+*/
+
 extern "C" {
 void raft_radon_slantstack_gpu(float* h_output, float* h_input, int sizeImage, int nrays, int nangles)
 {
@@ -20,11 +24,12 @@ void raft_radon_slantstack_gpu(float* h_output, float* h_input, int sizeImage, i
 	cudaMalloc(&d_input, sizeof(float) * sizeImage * sizeImage);
 	cudaMemcpy(d_input, h_input, sizeof(float) * sizeImage * sizeImage, cudaMemcpyHostToDevice);	
 
-	raft_radon_gpu_function(d_output, d_input, sizeImage, nrays, nangles);
+	raft_radon_gpu_function(d_output, d_input, sizeImage, nrays, nangles, 0.0);
 
 	// Copy output vector from GPU buffer to host memory.
 	cudaMemcpy(h_output, d_output, sizeof(float) * nrays * nangles, cudaMemcpyDeviceToHost);
 
+	cudaFree(d_input);
 	cudaFree(d_output);
 	cudaDeviceReset();
 }
