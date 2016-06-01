@@ -1,4 +1,4 @@
-RUNDIR=	raft pyraft pyraft/sinogram pyraft/phantom pyraft/backprojection pyraft/filters pyraft/inversion pyraft/iterative
+RUNDIR=	raft xfct pyraft pyraft/sinogram pyraft/phantom pyraft/backprojection pyraft/filters pyraft/inversion pyraft/iterative pyraft/coordinates pyraft/xfct
 
 all: build install
 
@@ -6,7 +6,7 @@ build:
 	sudo python setup.py build
 
 install:
-	sudo python setup.py install
+	sudo -E python setup.py install
 
 clean:
 	sudo python setup.py clean --all

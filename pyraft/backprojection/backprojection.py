@@ -32,12 +32,12 @@ def backprojection_with_mesh(sino, N, theta,t):
 # | function |#
 ###############
 
-def backprojection_plan( shape=(256, 360, 256), shape_res=(256, 256, 256), padding=2, method=radon_method.BST):
+def backprojection_plan( sino_shape=(256,180), shape=(256, 256), padding=2, method=radon_method.BST):
    """Computes the Backprojection using one of several methods"""
   
    # input shape = sinogram shape
-   nrays = shape[0]
-   nviews= shape[1]
+   nrays = sino_shape[0]
+   nviews= sino_shape[1]
 
    if method == radon_method.BRESENHAM:
       tupla = []
@@ -108,7 +108,7 @@ def backprojection_plan( shape=(256, 360, 256), shape_res=(256, 256, 256), paddi
       cut.top_left = ( coeff * fftc_re.top_left[0] , coeff * fftc_re.top_left[1] )
       cut.bottom_right = ( coeff * fftc_re.bottom_right[0], coeff * fftc_re.bottom_right[1] )
 
-      tupla = (method, padding, polarsino, zero_padded_sino, fftp_re, fftp_im, fftc_re, fftc_im, int1, cut, )
+      tupla = (method, shape, padding, polarsino, zero_padded_sino, fftp_re, fftp_im, fftc_re, fftc_im, int1, cut, )
  
    elif method == radon_method.ANDERSSON:
      
@@ -152,14 +152,13 @@ def backprojection_plan( shape=(256, 360, 256), shape_res=(256, 256, 256), paddi
       logpolarres.top_left = (-numpy.pi,0)
       logpolarres.bottom_right = (numpy.pi,r0)
 
-      
-      tupla = (method, padding, r0, polarsino, logpolarsino, kernel, logpolarres, )
+      tupla = (method, shape, padding, r0, polarsino, logpolarsino, kernel, logpolarres, )
 
    elif method == radon_method.ANDERSSONPB:
-      tupla = (method, padding, )
+      tupla = (method, shape, padding, )
 
    elif method == radon_method.SLANTSTACK:
-      tupla = (method, padding, )
+      tupla = (method, shape, padding, )
    
    else:
       raise TypeError('Unsupported method for Backprojection!')
@@ -173,10 +172,11 @@ def backprojection_plan( shape=(256, 360, 256), shape_res=(256, 256, 256), paddi
 # | function |#
 ###############
 
-def backprojection(sino, plan, shape=(256, 256), **kwargs):
+def backprojection(sino, plan, **kwargs):
    """Computes the Backprojection using one of several methods"""
 
    method = plan[0] 
+   shape = plan[1]
    
    # Create pyraft.img to hold backprojection:
    img = image(shape, **kwargs)

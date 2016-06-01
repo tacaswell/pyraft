@@ -13,9 +13,7 @@ nthreads = multiprocessing.cpu_count()
 
 # Load required libraies:
 
-libgsl=ctypes.CDLL( ctypes.util.find_library( "lgsl" ), mode=ctypes.RTLD_GLOBAL )
-libgslcblas = ctypes.CDLL( ctypes.util.find_library( "lgslcblas" ), mode=ctypes.RTLD_GLOBAL )
-libconfuse  = ctypes.CDLL( ctypes.util.find_library( "lconfuse" ), mode=ctypes.RTLD_GLOBAL)
+#XFCT_LIBS
 
 
 libstdcpp = ctypes.CDLL( ctypes.util.find_library( "stdc++" ), mode=ctypes.RTLD_GLOBAL )
@@ -458,26 +456,26 @@ def make_RAFT_IMAGE( array, top_left = ( -1.0, 1.0 ), bottom_right = ( 1.0, -1.0
 def make_RAFT_BST( tupla ):
    """Make a raft_bst from a tuple of {numpy.ndarray, pyraft.image or pyraft.matrix} """
    
-   return RAFT_BST(   ctypes.c_double(tupla[1]), 
-		      make_RAFT_IMAGE(tupla[2]), 
+   return RAFT_BST(   ctypes.c_double(tupla[2]), 
 		      make_RAFT_IMAGE(tupla[3]), 
 		      make_RAFT_IMAGE(tupla[4]), 
 		      make_RAFT_IMAGE(tupla[5]), 
 		      make_RAFT_IMAGE(tupla[6]), 
 		      make_RAFT_IMAGE(tupla[7]), 
 		      make_RAFT_IMAGE(tupla[8]), 
-		      make_RAFT_IMAGE(tupla[9]) 
+		      make_RAFT_IMAGE(tupla[9]), 
+		      make_RAFT_IMAGE(tupla[10]) 
 		    )
 
 def make_RAFT_LP( tupla ):
    """Make a raft_plan_logpolar from a tuple of {numpy.ndarray, pyraft.image or pyraft.matrix} """
    
-   return RAFT_LP(  ctypes.c_double(tupla[1]),
-                    ctypes.c_double(tupla[2]),
-                    make_RAFT_IMAGE(tupla[3]),
+   return RAFT_LP(  ctypes.c_double(tupla[2]),
+                    ctypes.c_double(tupla[3]),
                     make_RAFT_IMAGE(tupla[4]),
                     make_RAFT_IMAGE(tupla[5]),
-                    make_RAFT_IMAGE(tupla[6])
+                    make_RAFT_IMAGE(tupla[6]),
+                    make_RAFT_IMAGE(tupla[7])
            )
 
 
