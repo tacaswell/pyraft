@@ -125,8 +125,8 @@ void raft_image_p2c(raft_image polar,
 
   //Initialize mesh;
   
-  mesh.x0 = -0.707106781;
-  mesh.y0 = -0.707106781; 
+  mesh.x0 = -1.0; //-0.707106781;
+  mesh.y0 = -1.0; //-0.707106781; 
   mesh.dx = (double) (-2*mesh.x0)/(size-1); 
   mesh.dy = mesh.dx;
 

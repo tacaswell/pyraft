@@ -1,9 +1,9 @@
 #include "raft_image_functions.h"
-#include <fftw3.h>
-#include <algorithm>
 #include <iostream>
 #include <thread>
+// #include "g_output.h"
 
+double const pi = 3.1415926535897932384626433832795;
 extern "C" {
 
 // BLAS dcopy:
@@ -11,121 +11,56 @@ void dcopy_( int const *, double const *, int const *, double *, int const * );
 
 }
 
-void to_pos(raft_matrix &x)
+double norm(double *data, int size)
 {
-	int N1 = x.lines;
-	int N2 = x.columns;
-	for(int i=0; i<N1; i++) {
-		for(int j=0; j<N2; j++) {
-			raft_matrix_element(x, i, j) = fabs(raft_matrix_element(x, i, j));	
-		}
-	}
-}
-
-double mean(raft_matrix data)
-{
-	int Ns = data.lines;
-	int Nt = data.columns;
-
-	double res;
-	for(int j = 0; j<Nt; j++) {
-		for(int i=0; i<Ns; i++) {
-			res += raft_matrix_element(data, i, j);
-		}
-	}
-	return res/(Nt*Ns);
-}
-
-double mean_dc(raft_matrix data)
-{
-	int Ns = data.lines;
-	int Nt = data.columns;
-
-	double res;
-	for(int j = 0; j<Nt; j++) {
-		res += raft_matrix_element(data, 0, j);
-	}
-	return res/(Nt);
-}
-
-double raft_matrix_maximum_value(raft_matrix data, int &i_max, int &j_max)
-{
-	int Ns = data.lines;
-	int Nt = data.columns;
-	double res = fabs(raft_matrix_element(data, 0,0)); 
-	double el;
-	for(int j=0; j<Nt; j++) {
-		for(int i=0; i<Ns; i++) {
-			el = fabs(raft_matrix_element(data, i, j));
-			if(el > res) {
-				res = el;
-				i_max = i;
-				j_max = j;
-			}
-		}
+	double res = 0;
+	for(int i=0; i<size; i++) {
+		res += data[i]/size;
 	}
 	return res;
-}	
-
-double raft_matrix_minimum_value(raft_matrix data, int &i_min, int &j_min)
-{
-	int Ns = data.lines;
-	int Nt = data.columns;
-	double res = raft_matrix_element(data, 0,0); 
-	double el;
-	for(int j=0; j<Nt; j++) {
-		for(int i=0; i<Ns; i++) {
-			el = raft_matrix_element(data, i, j);
-			if(el < res) {
-				res = el;
-				i_min = i;
-				j_min = j;
-			}
-		}
-	}
-	return res;
-}	
-
-double desc_l2(raft_image img1, raft_image img2) 
-{
-	int Nx = img1.data.lines;
-	int Ny = img1.data.columns;
-	if(Nx != img2.data.lines || Ny != img2.data.columns) {
-		//std::cout<<"shopa with sizes"<<std::endl;
-	}
-	
-	double res = 0;	
-	for(int i = 0; i<Nx; i++) {
-		for(int j=0; j<Ny; j++) {
-			double a = raft_matrix_element(img1.data, i, j) - raft_matrix_element(img2.data, i, j);
-			res += a*a/(Nx*Ny);
-		}
-	}
-	return res;
-
-
 }
 
-void raft_image_normalize(raft_image &source)
+int iDivUp(int a, int b)
 {
-	int Ns = source.data.lines;
-	int Nt = source.data.columns;
+    return (a % b != 0) ? (a / b + 1) : (a / b);
+}
 
-	int im, jm;
-	double max = fabs(raft_matrix_maximum_value(source.data, im, jm));
-	//std::cout<<"maximum in the matrix: "<<max<<"with indexes "<<im<<", "<<jm<<std::endl;
-	double el;
-	for(int j=0; j<Nt; j++) {
-		for(int i=0; i<Ns; i++) {
-			raft_matrix_element(source.data, i, j) = 
-				fabs(raft_matrix_element(source.data, i, j))/max;
-		}
-	}
+//Align a to nearest higher multiple of b
+int iAlignUp(int a, int b)
+{
+    return (a % b != 0) ? (a - a % b + b) : a;
+}
 
-// 	source.tl_x = -1.0;
-// 	source.br_x = 1.0;
-// 	source.tl_y = 1.0;
-// 	source.br_x = -1.0;
+int snapTransformSize(int dataSize)
+{
+    int hiBit;
+    unsigned int lowPOT, hiPOT;
+
+    dataSize = iAlignUp(dataSize, 16);
+
+    for (hiBit = 31; hiBit >= 0; hiBit--)
+        if (dataSize & (1U << hiBit))
+        {
+            break;
+        }
+
+    lowPOT = 1U << hiBit;
+
+    if (lowPOT == (unsigned int)dataSize)
+    {
+        return dataSize;
+    }
+
+    hiPOT = 1U << (hiBit + 1);
+
+    if (hiPOT <= 1024)
+    {
+        return hiPOT;
+    }
+    else
+    {
+        return iAlignUp(dataSize, 512);
+    }
 }
 
 raft_image sino2sp(raft_image source)
@@ -140,6 +75,8 @@ raft_image sino2sp(raft_image source)
 	res.tl_y = 1;
 	res.br_y = 0;
 
+	std::cout<<"Transforming sinogram to polar : ("<<Ns<<","<<Nt<<" ) -> (";
+	std::cout<<Ns/2<<","<<2*Nt<<")."<<std::endl;
 	for(int t=0;t<Nt;++t) {
 		for(int s=0;s<Ns/2;++s) {
 			raft_matrix_element(res.data, s, t) =    raft_matrix_element(source.data, Ns/2 + s, t);
@@ -150,6 +87,127 @@ raft_image sino2sp(raft_image source)
 	return res;
 }
 
+raft_image sp2sino(raft_image source)
+{
+	int Ns = source.data.lines;
+	int Nt = source.data.columns;
+
+	raft_image res;
+	res.data = raft_matrix_create(2*Ns, Nt/2);
+	res.tl_x = -pi;
+	res.br_x = pi;
+	res.tl_y = 1;
+	res.br_y = -1;
+
+	std::cout<<"Transforming polar to sinogram : ("<<Ns<<","<<Nt<<" ) -> (";
+	std::cout<<2*Ns<<","<<Nt/2<<")."<<std::endl;
+	for(int t=0;t<Nt/2;++t) {
+		for(int s=0;s<Ns;++s) {
+			raft_matrix_element(res.data, Ns + s, t) = raft_matrix_element(source.data, s, t);
+			raft_matrix_element(res.data, Ns - s, t) = raft_matrix_element(source.data, s, t + Nt/2);
+		}
+	}
+// 	std::cout<<"sino2sp succeed"<<std::endl;
+	return res;
+}
+
+raft_image raft_image_rescale(raft_image source, double scale)
+{
+	raft_image res = source;
+	int Nt = res.data.columns;
+	int Ns = res.data.lines;
+	for(int j=0; j<Nt; j++) {
+		for(int i=0; i<Ns; i++) {
+			raft_matrix_element(res.data, i, j) = 
+				scale*raft_matrix_element(res.data, i, j);
+		}
+	}
+	return res;
+}	
+
+raft_image pad_sector(raft_image sector)
+{
+	int Ns = sector.data.lines;
+	int N = sector.data.columns;
+	
+	double t0 = sector.tl_x;
+	double t1 = sector.br_x;
+// 	if(t0 < 0) t0 += 2*pi;
+// 	if(t1 < 0) t1 += 2*pi;
+// 
+// 	if(t0 > 2*pi) t0 -= 2*pi;
+// 	if(t1 > 2*pi) t1 -= 2*pi;
+
+	double dt = std::abs(t1 - t0)/N;
+	int Nt = 2*pi/dt; 
+	raft_image res = raft_image_create(Ns, Nt);
+
+	res.tl_x = -pi;
+	res.br_x = pi;
+	res.br_y = sector.br_y;
+	res.tl_y = sector.tl_y;
+
+	int idx_start = (t0 + pi)/dt;
+	int pos;
+
+	std::cout<<"Padding the sector: ("<<Ns<<","<<N<<") -> (";
+	std::cout<<Ns<<","<<Nt<<")."<<std::endl;
+	for(int i=0; i<Ns; i++) {
+		for(int j=0; j<N; j++) {
+			pos = j+idx_start;
+		
+			if(pos< Nt-1 && pos >=0) {
+				raft_matrix_element(res.data, i, pos) =
+					raft_matrix_element(sector.data, i, j);
+			} else if(pos < 0) {
+				raft_matrix_element(res.data, i, Nt-pos) =
+					raft_matrix_element(sector.data, i, j);
+			} else if(pos > Nt-1) {
+				raft_matrix_element(res.data, i, pos - Nt) =
+					raft_matrix_element(sector.data, i, j);
+			}
+		}
+	}
+	return res;
+
+}	
+
+raft_image pad_sector(raft_image sector, int Nt, double t0, double t1)
+{
+	int Ns = sector.data.lines;
+	int N = sector.data.columns;
+	raft_image res = raft_image_create(Ns, Nt);
+	res.tl_x = -pi;
+	res.br_x = pi;
+
+	res.br_y = sector.br_y;
+	res.tl_y = sector.tl_y;
+	double dt = (t1 - t0)/N;
+
+	int idx_start = (t0 + pi)/dt;
+	int pos;
+
+	std::cout<<"Padding the sector: t0="<<t0<<"t1="<<t1<<std::endl;;
+	for(int i=0; i<Ns; i++) {
+		for(int j=0; j<N; j++) {
+			pos = j+idx_start;
+		
+			if(pos< Nt-1 && pos >=0) {
+				raft_matrix_element(res.data, i, pos) =
+					raft_matrix_element(sector.data, i, j);
+			} else if(pos < 0) {
+				raft_matrix_element(res.data, i, Nt-pos) =
+					raft_matrix_element(sector.data, i, j);
+			} else if(pos > Nt-1) {
+				raft_matrix_element(res.data, i, pos - Nt) =
+					raft_matrix_element(sector.data, i, j);
+			}
+		}
+	}
+	return res;
+
+}	
+
 raft_image get_sector(raft_image source, double t0, double t1)
 {
 	int Ns = source.data.lines;
@@ -159,10 +217,10 @@ raft_image get_sector(raft_image source, double t0, double t1)
 	double old_t1 = std::max(source.br_x, source.tl_x);
 	double dt = (old_t1 - old_t0)/Nt;
 
-	//std::cout<<"_____________ GET SECTOR _____________"<<std::endl;
-	//std::cout<<"Old angles: t0="<<old_t0<<"; t1="<<source.tl_x<<std::endl;
-	//std::cout<<"New angles: t0="<<t0<<"; t1="<<t1<<std::endl;
-	//std::cout<<"dt="<<dt<<std::endl;
+	std::cout<<"_____________ GET SECTOR _____________"<<std::endl;
+	std::cout<<"Old angles: t0="<<old_t0<<"; t1="<<source.tl_x<<std::endl;
+	std::cout<<"New angles: t0="<<t0<<"; t1="<<t1<<std::endl;
+	std::cout<<"dt="<<dt<<std::endl;
 
 
 	raft_image res;
@@ -170,7 +228,7 @@ raft_image get_sector(raft_image source, double t0, double t1)
 		int idx_start = floor((t0 - old_t0)/dt);
 		int idx_end = floor((t1 - old_t0)/dt);
 		int N = idx_end - idx_start;
-		//std::cout<<"!!!!!!!!!!!!!!!!   "<<idx_start<<", "<<idx_end<<" !!!!!!"<<//std::cout;
+		std::cout<<"!!!!!!!!!!!!!!!!   "<<idx_start<<", "<<idx_end<<" !!!!!!"<<std::cout;
 		res.data = raft_matrix_create(Ns, N);
 		for(int j=0;j<N;j++) {
 			for(int i=0;i<Ns; ++i) {
@@ -183,7 +241,7 @@ raft_image get_sector(raft_image source, double t0, double t1)
 		t1 -= 2*pi;
 		int idx1 = floor((t0 - old_t0)/dt);
 		int idx2 = floor((t1 - old_t0)/dt);
-		//std::cout<<"2 case: idx1="<<idx1<<"; idx2="<<idx2<<std::endl;
+		std::cout<<"2 case: idx1="<<idx1<<"; idx2="<<idx2<<std::endl;
 		int N1 = Nt - idx1 - 1;
 		int N2 = idx2;
 		int N = N1 + N2; 
@@ -201,7 +259,7 @@ raft_image get_sector(raft_image source, double t0, double t1)
 		t0 += 2*pi;
 		int idx1 = floor((t0 - old_t0)/dt);
 		int idx2 = floor((t1 - old_t0)/dt);
-		//std::cout<<"3 case: idx1="<<idx1<<"; idx2="<<idx2<<std::endl;
+		std::cout<<"3 case: idx1="<<idx1<<"; idx2="<<idx2<<std::endl;
 		int N1 = Nt - idx1 - 1;
 		int N2 = idx2;
 		int N = N1 + N2; 
@@ -220,7 +278,7 @@ raft_image get_sector(raft_image source, double t0, double t1)
 		t1 -= 2*pi;
 		int idx1 = floor((t0 - old_t0)/dt);
 		int idx2 = floor((t1 - old_t0)/dt);
-		//std::cout<<"4 case: idx1="<<idx1<<"; idx2="<<idx2<<std::endl;
+		std::cout<<"4 case: idx1="<<idx1<<"; idx2="<<idx2<<std::endl;
 		int N1 = Nt - 1 - idx1;
 		int N2 = idx2;
 		int N = Nt + N1 + N2;
@@ -243,7 +301,7 @@ raft_image get_sector(raft_image source, double t0, double t1)
 	res.br_x = t0;
 	res.tl_y = source.tl_y;
 	res.br_y = source.br_y;
-	//std::cout<<"get_sector suceed"<<std::endl;
+	std::cout<<"get_sector suceed"<<std::endl;
 	return res;
 }
 
@@ -256,10 +314,10 @@ raft_image filter_sector(raft_image source, double t0, double t1)
 	double old_t1 = std::max(source.br_x, source.tl_x);
 	double dt = (old_t1 - old_t0)/Nt;
 
-	//std::cout<<"_____________ GET SECTOR _____________"<<std::endl;
-	//std::cout<<"Old angles: t0="<<old_t0<<"; t1="<<source.tl_x<<std::endl;
-	//std::cout<<"New angles: t0="<<t0<<"; t1="<<t1<<std::endl;
-	//std::cout<<"dt="<<dt<<std::endl;
+	std::cout<<"_____________ GET SECTOR _____________"<<std::endl;
+	std::cout<<"Old angles: t0="<<old_t0<<"; t1="<<source.tl_x<<std::endl;
+	std::cout<<"New angles: t0="<<t0<<"; t1="<<t1<<std::endl;
+	std::cout<<"dt="<<dt<<std::endl;
 
 	raft_image res;
 	res.data = raft_matrix_create(Ns, Nt);
@@ -277,7 +335,7 @@ raft_image filter_sector(raft_image source, double t0, double t1)
 	res.br_x = source.br_x;
 	res.tl_y = source.tl_y;
 	res.br_y = source.br_y;
-	//std::cout<<"get_sector suceed"<<std::endl;
+	std::cout<<"get_sector suceed"<<std::endl;
 	return res;
 }
 
@@ -285,19 +343,21 @@ raft_image rotate(raft_image source, double t)
 {
 	int Ns = source.data.lines;
 	int Nt = source.data.columns;
-	
+
+	std::cout<<"Rotating image on "<<t<<"; Ns="<<Ns<<"; Nt="<<Nt<<std::endl;
 	raft_image res;
 	
 	double t0 = source.tl_x;
 	double t1 = source.br_x;
 
 
-	double dt = (t1 - t0)/Nt;
+	double dt = fabs(t1 - t0)/Nt;
 	int idxt =floor(t/dt);
 
 	raft_matrix tmp = raft_matrix_create(Ns, Nt);
 	for(int j=0;j<Nt;j++) {
 		for(int i=0;i<Ns; ++i) {
+// 			std::cout<<"("<<i<<","<<j<<")"<<std::endl;
 			if(idxt>0) {
 				if(j+idxt<Nt) {
 					raft_matrix_element(tmp, i,  j + idxt) = raft_matrix_element(source.data, i, j);
@@ -311,12 +371,21 @@ raft_image rotate(raft_image source, double t)
 					raft_matrix_element(tmp, i,  j + idxt + Nt -1) = raft_matrix_element(source.data, i, j);
 				}
 			}
+
+// 			if(j+idxt < Ns && j+idxt>=0) {
+// 				raft_matrix_element(tmp, i, j + idxt) = raft_matrix_element(source.data, i, j);
+// 			} else if(j+idxt>Nt-1) {
+// 				raft_matrix_element(tmp, i, j+idxt - Nt) = raft_matrix_element(source.data, i, j);
+// 			} else if(j+idxt<0) {
+// 				raft_matrix_element(tmp, i, j+idxt + Nt - 1) = raft_matrix_element(source.data, i, j);
+// 			}
+// 		 
 		}
 	}
 	res.data = tmp;
 	res.tl_x = source.tl_x;
 	res.br_x = source.br_x;
-	res.tl_y = source.tl_y;
+	 res.tl_y = source.tl_y;
 	res.br_y = source.br_y;
 	return res;
 }
@@ -341,9 +410,9 @@ raft_image cut(raft_image source, double tl_x, double br_x,
 	double dx = (x1-x0)/Nx;	
 	double dy = (y1-y0)/Ny;	
 
-	//std::cout<<"________cutting______________"<<std::endl;
-	//std::cout<<"old tl_x="<<x0<<"; old br_x="<<x1<<"; new tl_x="<<tl_x<<"; new br_x="<<br_x<<std::endl;
-	//std::cout<<"old br_y="<<y0<<"; old tl_y="<<y1<<"; new br_y="<<br_y<<"; new tl_y="<<tl_y<<std::endl;
+	std::cout<<"________cutting______________"<<std::endl;
+	std::cout<<"old tl_x="<<x0<<"; old br_x="<<x1<<"; new tl_x="<<tl_x<<"; new br_x="<<br_x<<std::endl;
+	std::cout<<"old br_y="<<y0<<"; old tl_y="<<y1<<"; new br_y="<<br_y<<"; new tl_y="<<tl_y<<std::endl;
 	if(tl_x < x0) tl_x = x0;
 	if(br_x > x1) br_x = x1;
 	
@@ -359,9 +428,9 @@ raft_image cut(raft_image source, double tl_x, double br_x,
 	int nx = idx_x1 - idx_x0;
 	int ny = idx_y1 - idx_y0;
 
-	//std::cout<<"idx_x0="<<idx_x0<<"; idx_x1="<<idx_x1<<" idx_y0="<<idx_y0<<"; idx_y1="<<idx_y1<<std::endl;
-	//std::cout<<"old size: <"<<Nx<<" x "<<Nx<<">; dx="<<dx<<"; dy="<<dy<<std::endl;
-	//std::cout<<"new size: <"<<nx<<" x "<<ny<<">"<<std::endl; 
+	std::cout<<"idx_x0="<<idx_x0<<"; idx_x1="<<idx_x1<<" idx_y0="<<idx_y0<<"; idx_y1="<<idx_y1<<std::endl;
+	std::cout<<"old size: <"<<Nx<<" x "<<Nx<<">; dx="<<dx<<"; dy="<<dy<<std::endl;
+	std::cout<<"new size: <"<<nx<<" x "<<ny<<">"<<std::endl; 
 
 	raft_image res;
 	res.data = raft_matrix_create(ny, nx);
@@ -419,48 +488,51 @@ raft_image raft_image_flip_y(raft_image &source)
 	return res;
 }
 
-raft_image zero_padding(raft_image source, int Nl, int Nc)
+raft_image zero_padding(raft_image source, int Ns, int Nt)
 {
-	int min_l = (source.data.lines < Nl) ? source.data.lines : Nl;
-	int min_c = (source.data.columns < Nl) ? source.data.columns : Nl;
-
-// 	double dl = source.data.line_stride;
-// 	double dc = source.data.column_stride;
-
-	double dc = (source.tl_x - source.br_x)/source.data.columns;
-	double dl = (source.br_y - source.tl_y)/source.data.lines;
+	if(Ns < source.data.lines || Nt < source.data.columns) return source;
+	double dt = fabs(source.tl_x - source.br_x)/source.data.columns;
+	double ds = fabs(source.br_y - source.tl_y)/source.data.lines;
 
 
-// 	std::cout<<"Zerro padding started:"<<std::endl;
-// 	std::cout<<"dc="<<dc<<"; dl="<<dl<<std::endl;;
-// 	std::cout<<"OLD size: lines="<<source.data.lines<<"; columns="<<source.data.columns<<std::endl;
-// 	std::cout<<"NEW size: lines="<<Nl<<"; columns="<<Nc<<std::endl;
-	raft_image res = source;
-	res.data = raft_matrix_create(Nl, Nc);
-	int start_j = (Nc - source.data.columns)/2;
-	int start_i = (Nl - source.data.lines)/2;
-	for(int j=0; j<min_c; j++) {
-		for(int i=0; i<min_l; i++) {
-			raft_matrix_element(res.data, i + start_i, j + start_j) = raft_matrix_element(source.data, i, j);	
+	std::cout<<"Zerro padding started:"<<std::endl;
+	std::cout<<"dt="<<dt<<"; ds="<<ds<<std::endl;;
+	std::cout<<"OLD size: lines="<<source.data.lines<<"; columns="<<source.data.columns<<std::endl;
+	std::cout<<"NEW size: lines="<<Ns<<"; columns="<<Nt<<std::endl;
+	int start_j = (Nt - source.data.columns);
+	int start_i = (Ns - source.data.lines);
+	
+	double new_min_x = source.tl_x - start_j*dt/2;
+	double new_min_y = source.br_y - start_i*ds/2;
+	double new_max_x = new_min_x + Nt*dt ;
+	double new_max_y = new_min_y + Ns*ds;
+
+	raft_image res;
+	res.tl_x = new_min_x;
+	res.br_x = new_max_x;
+	res.br_y = new_min_y;
+	res.tl_y = new_max_y;
+	res.data = raft_matrix_create(Ns, Nt);
+	for(int j=0; j<Nt - start_j; j++) {
+		for(int i=0; i<Ns - start_i; i++) {
+			raft_matrix_element(res.data, i + start_i/2, j + start_j/2) = raft_matrix_element(source.data, i, j);	
 		}
 	}	
 
-	double new_max_x = source.br_x + Nc*dc;
-	double new_max_y = source.tl_y + Nl*dl;
 
-// 	std::cout<<"OLD range ("<<source.br_x<<", "<<source.tl_x<<") X ("<<source.tl_y<<", "<<source.br_y<<")."<<std::endl;
-// 	std::cout<<"NEW range ("<<source.br_x<<", "<<new_max_x<<") X ("<<source.tl_y<<", "<<new_max_y<<")."<<std::endl;
-	res.tl_x = new_max_x;
-	res.br_y = new_max_y;
-// 	std::cout<<"zerro padding succeed"<<std::endl;
+// 	std::cout<<"OLD range ("<<source.br_x<<", "<<source.tl_x<<") X ("<<source.tl_y<<", "<<source.br_y<<")."<<std::ends;
+// 	std::cout<<"NEW range ("<<source.br_x<<", "<<new_max_x<<") X ("<<source.tl_y<<", "<<new_max_y<<")."<<std::ends;
+	res.br_x = new_max_x;
+	res.tl_y = new_max_y;
+	std::cout<<"zerro padding succeed"<<std::ends;
 
 	return res;
 }
 
 raft_image zero_padding_on_s(raft_image source, int Ns)
 {
-	int nt = source.data.columns;
 	int ns = source.data.lines;
+	int nt = source.data.columns;
 	if(Ns <= ns) return source;
 	
 	double ds = fabs(source.br_y - source.tl_y)/ns;
@@ -473,19 +545,47 @@ raft_image zero_padding_on_s(raft_image source, int Ns)
 	res.br_y = source.br_y;
 	res.tl_y = s_max;
 
-	//std::cout<<"Zerro padding started:"<<std::endl;
-	//std::cout<<"ds="<<ds<<std::endl;;
-	//std::cout<<"OLD size: lines="<<source.data.lines<<"; columns="<<source.data.columns<<std::endl;
-	//std::cout<<"NEW size: lines="<<Ns<<"; columns="<<nt<<std::endl;
 
 	res.data = raft_matrix_create(Ns, nt);
-	for(int j=0; j<ns; j++) {
-		for(int i=0; i<nt; i++) {
-			raft_matrix_element(res.data, j, i) = raft_matrix_element(source.data, j, i);
+	std::cout<<"Zerro padding on s : ("<<ns<<","<<nt<<" ) -> (";
+	std::cout<<Ns<<","<<nt<<")."<<std::endl;
+	for(int j=0; j<nt; j++) {
+		for(int i=0; i<ns; i++) {
+			raft_matrix_element(res.data, i, j) = raft_matrix_element(source.data, i, j);
 		}	
 	}
 	return res;
 
+}
+
+#include <string.h>
+void zero_padding_on_s(raft_image source, raft_image res_, int Ns)
+{
+	int ns = source.data.lines;
+	int nt = source.data.columns;
+	if(Ns <= ns) return;
+	
+	double ds = fabs(source.br_y - source.tl_y)/ns;
+
+	double s_max = source.br_y + Ns*ds;
+
+	raft_image res;
+	res.br_x = source.br_x;
+	res.tl_x = source.tl_x;
+	res.br_y = source.br_y;
+	res.tl_y = s_max;
+
+
+	res.data = raft_matrix_create(Ns, nt);
+	std::cout<<"Zerro padding on s : ("<<ns<<","<<nt<<" ) -> (";
+	std::cout<<Ns<<","<<nt<<")."<<std::endl;
+	for(int j=0; j<nt; j++) {
+		for(int i=0; i<ns; i++) {
+			raft_matrix_element(res.data, i, j) = raft_matrix_element(source.data, i, j);
+		}	
+	}
+	memcpy((double*)res_.data.p_data, (double*)res.data.p_data, sizeof(double)*Ns*nt);
+	raft_image_destroy(&res);
 }
 
 raft_image zero_padding_sino(raft_image source, int Ns)
@@ -504,10 +604,10 @@ raft_image zero_padding_sino(raft_image source, int Ns)
 	res.tl_y = s_max;
 	res.br_y = - s_max;
 
-	//std::cout<<"Zerro padding started:"<<std::endl;
-	//std::cout<<"; ds="<<ds<<std::endl;;
-	//std::cout<<"OLD size: lines="<<source.data.lines<<"; columns="<<source.data.columns<<std::endl;
-	//std::cout<<"NEW size: lines="<<Ns<<"; columns="<<nt<<std::endl;
+	std::cout<<"Zerro padding started:"<<std::endl;
+	std::cout<<"; ds="<<ds<<std::endl;;
+	std::cout<<"OLD size: lines="<<source.data.lines<<"; columns="<<source.data.columns<<std::endl;
+	std::cout<<"NEW size: lines="<<Ns<<"; columns="<<nt<<std::endl;
 
 	res.data = raft_matrix_create(Ns, nt);
 	int idx_start = (Ns - ns)/2;
@@ -643,13 +743,13 @@ raft_image sp2c(raft_image source, int Nx, int Ny)
 	double dx = s1*2/Nx;
 	double dy = s1*2/Ny;
 
-// 	std::cout<<"___________ semi-polar 2 cartesian interpolation ________"<<std::endl;
-// 	std::cout<<"old size: Ns="<<Ns<<"; Nt="<<Nt<<std::endl;
-// 	std::cout<<"new size: Nx="<<Nx<<"; Ny="<<Ny<<std::endl;
-// 	std::cout<<"s0="<<s0<<"; s1="<<s1<<"; ds="<<ds<<std::endl;
-// 	std::cout<<"t0="<<t0<<"; t1="<<t1<<"; dt="<<dt<<std::endl;
-// 	std::cout<<"x0="<<x0<<"; x1="<<x1<<"; dx="<<dx<<std::endl;
-// 	std::cout<<"y0="<<y0<<"; y1="<<y1<<"; dy="<<dy<<std::endl;
+	std::cout<<"___________ semi-polar 2 cartesian interpolation ________"<<std::endl;
+	std::cout<<"old size: Ns="<<Ns<<"; Nt="<<Nt<<std::endl;
+	std::cout<<"new size: Nx="<<Nx<<"; Ny="<<Ny<<std::endl;
+	std::cout<<"s0="<<s0<<"; s1="<<s1<<"; ds="<<ds<<std::endl;
+	std::cout<<"t0="<<t0<<"; t1="<<t1<<"; dt="<<dt<<std::endl;
+	std::cout<<"x0="<<x0<<"; x1="<<x1<<"; dx="<<dx<<std::endl;
+	std::cout<<"y0="<<y0<<"; y1="<<y1<<"; dy="<<dy<<std::endl;
 
 	double x = x0; 
 	double y = y0;
@@ -664,7 +764,7 @@ raft_image sp2c(raft_image source, int Nx, int Ny)
 	for(int j=0; j<Ny; j++) {
 		for(int i=0; i<Nx; i++) {
 			s = sqrt(x*x + y*y);
-			t = 180*acos(x/s)/pi;
+			t = acos(x/s);
 			t = (y>0) ? t :  - t;
 
 			idxt_min = floor((t-t0)/dt);
@@ -722,13 +822,13 @@ raft_image c2sp(raft_image source, int Nt, int Ns)
 	double s1 = sqrt(x1*x1 + y1*y1); //FIXME
 	double ds = (s1 - s0)/Ns;
 
-	double t0 = -180;
-	double t1 = 180;
-	double dt = 360.0/Nt;
+	double t0 = -pi;
+	double t1 = pi;
+	double dt = 2*pi/Nt;
 
-// 	//std::cout<<"___________ cartesian 2 semi-polar interpolation ________"<<std::endl;
-// 	//std::cout<<"old size: Nx="<<Nx<<"; Ny="<<Ny<<std::endl;
-// 	//std::cout<<"new size: Nt="<<Nt<<"; Ns="<<Ns<<std::endl;
+// 	std::cout<<"___________ cartesian 2 semi-polar interpolation ________"<<std::endl;
+// 	std::cout<<"old size: Nx="<<Nx<<"; Ny="<<Ny<<std::endl;
+// 	std::cout<<"new size: Nt="<<Nt<<"; Ns="<<Ns<<std::endl;
 // 	std::cout<<"s0="<<s0<<"; s1="<<s1<<"; ds="<<ds<<std::endl;
 // 	std::cout<<"t0="<<t0<<"; t1="<<t1<<"; dt="<<dt<<std::endl;
 // 	std::cout<<"x0="<<x0<<"; x1="<<x1<<"; dx="<<dx<<std::endl;
@@ -751,8 +851,8 @@ raft_image c2sp(raft_image source, int Nt, int Ns)
 	double x_min, x_maj, y_min, y_maj, f11, f12, f21, f22, f, dv;
 
 	for(int j=0; j<Nt; ++j) {
-		double _cos = cos(pi*t/180);
-		double _sin = sin(pi*t/180);
+		double _cos = cos(t);
+		double _sin = sin(t);
 		for(int i=0; i<Ns; ++i) {
 			x = s*_cos; 
 			y = s*_sin;
@@ -1015,13 +1115,13 @@ raft_image c2lp(raft_image source, int Nt, int Nr, double r0)
 	double t1 = 180;
 	double dt = 360.0/Nt;
 
-	//std::cout<<"___________ cartesian 2 semi-polar interpolation ________"<<std::endl;
-	//std::cout<<"old size: Nx="<<Nx<<"; Ny="<<Ny<<std::endl;
-	//std::cout<<"new size: Nt="<<Nt<<"; Nr="<<Nr<<std::endl;
-	//std::cout<<"r0="<<r0<<"; r1="<<r1<<"; dr="<<dr<<std::endl;
-	//std::cout<<"t0="<<t0<<"; t1="<<t1<<"; dt="<<dt<<std::endl;
-	//std::cout<<"x0="<<x0<<"; x1="<<x1<<"; dx="<<dx<<std::endl;
-	//std::cout<<"y0="<<y0<<"; y1="<<y1<<"; dy="<<dy<<std::endl;
+	std::cout<<"___________ cartesian 2 semi-polar interpolation ________"<<std::endl;
+	std::cout<<"old size: Nx="<<Nx<<"; Ny="<<Ny<<std::endl;
+	std::cout<<"new size: Nt="<<Nt<<"; Nr="<<Nr<<std::endl;
+	std::cout<<"r0="<<r0<<"; r1="<<r1<<"; dr="<<dr<<std::endl;
+	std::cout<<"t0="<<t0<<"; t1="<<t1<<"; dt="<<dt<<std::endl;
+	std::cout<<"x0="<<x0<<"; x1="<<x1<<"; dx="<<dx<<std::endl;
+	std::cout<<"y0="<<y0<<"; y1="<<y1<<"; dy="<<dy<<std::endl;
 
 	double x = x0; 
 	double y = y0;
@@ -1104,6 +1204,29 @@ void fft_shift_2d(raft_matrix &x)
 	}
 }
 
+void fft_shift_2d(double *x, int Nx, int Ny)
+{
+	double tmp;
+	int idx;
+	for(int i=0;i<Nx;i++){
+		for(int j=0;j<Ny/2;j++){
+			idx = j*Nx+i;
+			tmp = x[idx];
+			x[idx] = x[(Ny/2+j)*Nx + i];
+			x[(Ny/2+j)*Nx+i] = tmp;
+		}
+	}
+
+	for(int i=0;i<Nx/2;i++){
+		for(int j=0;j<Ny;j++){
+			idx = j*Nx+i;
+			tmp = x[idx];
+			x[idx] = x[j*Nx + i+Nx/2];
+			x[j*Nx+i+Nx/2] = tmp;
+		}
+	}
+}
+
 void convolution_2d(raft_matrix x, raft_matrix k, raft_matrix &res, int threads)
 {
 	int Nx = x.lines;
@@ -1171,6 +1294,126 @@ void convolution_2d(raft_matrix x, raft_matrix k, raft_matrix &res, int threads)
 	fftw_destroy_plan(p_r);
 	fftw_free(x_in);
 	fftw_free(x_out);
+}
+
+double *convolution_2d_C2R(double *x, double *k, int Nx, int Ny, int threads )
+{
+	std::cout<<"conv_2d starts: Mx="<<Nx<<"; Ny="<<Ny<<std::endl;
+	int data_size = Nx*Ny;
+	int spectra_size = Nx*(Ny/2+1);
+
+	double scale = 1.0/spectra_size;
+	fftw_complex *spectrum_data = 	(fftw_complex*) fftw_malloc(spectra_size*sizeof(fftw_complex));
+	fftw_complex *spectrum_kernel = (fftw_complex*) fftw_malloc(spectra_size*sizeof(fftw_complex));
+
+	fftw_init_threads();
+	fftw_plan_with_nthreads(threads);
+
+	fftw_plan p = fftw_plan_dft_r2c_2d(Nx, Ny, x, spectrum_data, 
+			FFTW_ESTIMATE);
+	fftw_execute_dft_r2c(p, x, spectrum_data);
+	fftw_execute_dft_r2c(p, k, spectrum_kernel);
+
+	std::cout<<"conv2d: straight FFT(x) succeed"<<std::endl;
+	double xr, xi, kr, ki;
+	for(int i=0; i<spectra_size; i++) {
+		xr = spectrum_data[i][0];
+		xi = spectrum_data[i][1];
+
+		kr = spectrum_kernel[i][0];
+		ki = spectrum_kernel[i][1];
+			
+		spectrum_data[i][0] = 	(xr*kr - xi*ki)*scale;
+		spectrum_data[i][1] = 	(xr*ki + xi*kr)*scale;
+	}
+	std::cout<<"conv2d: Multiplication succeed"<<std::endl;
+	fftw_plan pinv = fftw_plan_dft_c2r_2d(Nx, Ny, spectrum_data, x, FFTW_ESTIMATE);
+	fftw_execute_dft_c2r(pinv, spectrum_data, x);
+	std::cout<<"conv2d: inverse fourier procedure succeed"<<std::endl;
+	fftw_destroy_plan(p);
+	fftw_destroy_plan(pinv);
+	fftw_free(spectrum_data);
+	fftw_free(spectrum_kernel);
+
+	std::cout<<"conv2d: SUCCEED"<<std::endl;
+	return x;
+}
+
+fftw_complex *fftw_2d_R2C(double *x, int Nx, int Ny, int threads)
+{
+	std::cout<<"ffw_2d_r2c starts: Mx="<<Nx<<"; Ny="<<Ny<<std::endl;
+	double scale = 1.0/(Nx*Ny);
+	int data_size = Nx*Ny;
+	int spectra_size = Nx*(Ny/2+1);
+
+	fftw_complex *spectrum_data = 	(fftw_complex*) fftw_malloc(spectra_size*sizeof(fftw_complex));
+	fftw_init_threads();
+	fftw_plan_with_nthreads(threads);
+
+	fftw_plan p = fftw_plan_dft_r2c_2d(Nx, Ny, x, spectrum_data, 
+			FFTW_ESTIMATE);
+	fftw_execute_dft_r2c(p, x, spectrum_data);
+	return spectrum_data;
+
+}
+
+double *ifftw_2d_C2R(fftw_complex *sp, int Nx, int Ny, int nthreads)
+{
+	double scale = 1.0/(Nx*Ny);
+	int data_size = Nx*Ny;
+	int spectra_size = Nx*(Ny/2+1);
+
+	double *res = new double[data_size];
+
+	fftw_init_threads();
+	fftw_plan_with_nthreads(nthreads);
+
+	fftw_plan pinv = fftw_plan_dft_c2r_2d(Nx, Ny, sp, res, FFTW_ESTIMATE);
+	fftw_execute_dft_c2r(pinv, sp, res);
+	fftw_destroy_plan(pinv);
+	return res;
+	
+}
+
+double *semi_convolution_2d_C2R(double *x, 
+		fftw_complex *spectrum_kernel, int Nx, int Ny, int threads)
+{
+	std::cout<<"conv_2d starts: Mx="<<Nx<<"; Ny="<<Ny<<std::endl;
+	double scale = 1.0/(Nx*Ny);
+	int data_size = Nx*Ny;
+	int spectra_size = Nx*(Ny/2+1);
+
+	fftw_complex *spectrum_data = 	(fftw_complex*) fftw_malloc(spectra_size*sizeof(fftw_complex));
+
+	fftw_init_threads();
+	fftw_plan_with_nthreads(threads);
+
+	fftw_plan p = fftw_plan_dft_r2c_2d(Nx, Ny, x, spectrum_data, 
+			FFTW_ESTIMATE);
+	fftw_execute_dft_r2c(p, x, spectrum_data);
+
+	std::cout<<"conv2d: straight FFT(x) succeed"<<std::endl;
+	double xr, xi, kr, ki;
+	for(int i=0; i<spectra_size; i++) {
+		xr = spectrum_data[i][0];
+		xi = spectrum_data[i][1];
+
+		kr = spectrum_kernel[i][0];
+		ki = spectrum_kernel[i][1];
+			
+		spectrum_data[i][0] = 	(xr*kr - xi*ki)*scale;
+		spectrum_data[i][1] = 	(xr*ki + xi*kr)*scale;
+	}
+	std::cout<<"conv2d: Multiplication succeed"<<std::endl;
+	fftw_plan pinv = fftw_plan_dft_c2r_2d(Nx, Ny, spectrum_data, x, FFTW_ESTIMATE);
+	fftw_execute_dft_c2r(pinv, spectrum_data, x);
+	std::cout<<"conv2d: inverse fourier procedure succeed"<<std::endl;
+	fftw_destroy_plan(p);
+	fftw_destroy_plan(pinv);
+	fftw_free(spectrum_data);
+
+	std::cout<<"conv2d: SUCCEED"<<std::endl;
+	return x;
 }
 
 void convolution_2d_2(raft_matrix x, raft_matrix k, raft_matrix &res, int threads)
@@ -1273,7 +1516,7 @@ void convolution_2d_2(raft_matrix x, raft_matrix k, raft_matrix &res, int thread
 		}
 	}
 
-	fft_shift_2d(res);
+// 	fft_shift_2d(res);
 	fftw_destroy_plan(p);
 	fftw_destroy_plan(p_r);
 	fftw_free(x_in);
@@ -1287,7 +1530,7 @@ void deconvolution_2d(raft_matrix x, raft_matrix k, raft_matrix &res, double a, 
 	int Nx = x.lines;
 	int Ny = x.columns;
 
-	//std::cout<<"deconv_2d starts: Mx="<<Nx<<"; Ny="<<Ny<<std::endl;
+	std::cout<<"deconv_2d starts: Mx="<<Nx<<"; Ny="<<Ny<<std::endl;
 	fftw_complex *x_in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*Nx*Ny);
 	fftw_complex *k_in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*Nx*Ny);
 	fftw_complex *x_out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*Nx*Ny);
@@ -1311,7 +1554,7 @@ void deconvolution_2d(raft_matrix x, raft_matrix k, raft_matrix &res, double a, 
 	}
 	fftw_execute_dft(p, x_in, x_out);
 	fftw_execute_dft(p, k_in, k_out); 
-	//std::cout<<"FFT of the kernel done"<<std::endl;
+	std::cout<<"FFT of the kernel done"<<std::endl;
 	double xr, xi, kr, ki, scale;
 	double cx, cy, d;
 	double asize = 1.0; 
@@ -1360,14 +1603,55 @@ void deconvolution_2d(raft_matrix x, raft_matrix k, raft_matrix &res, double a, 
 
 void ifftw_2d(raft_matrix &xr, raft_matrix &xi, int threads)
 {
-// 	std::cout<<"iFFT_2D started"<<std::endl;
+	std::cout<<"iFFTW 2D started"<<std::endl;
+	int N = xr.lines;
+	int M = xr.columns;
+	fftw_complex *in, *out;
+	in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*N*M);
+	out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*N*M);
+	int idx; 
+	for(int j=0; j<M; j++) {
+		for(int i=0; i<N; i++) {
+			idx = j*N + i;
+			in[idx][0] = raft_matrix_element(xr, i, j);	
+			in[idx][1] = raft_matrix_element(xi, i, j);	
+
+		}
+	}
+	fftw_init_threads();
+	fftw_plan_with_nthreads(threads);
+	fftw_plan p = fftw_plan_dft_2d(N, M, in, out, FFTW_BACKWARD, FFTW_ESTIMATE);
+	fftw_execute(p); /* repeat as needed */
+	fftw_destroy_plan(p);
+	fftw_free(in);
+// 	double factor = 1.0/(N*M);
+	double factor = 1.0;
+	for(int j=0; j<M; j++) {
+		for(int i=0; i<N; i++) {
+			idx = j*N + i;
+			raft_matrix_element(xr, i, j) = out[idx][0]*factor;
+			raft_matrix_element(xi, i, j) = out[idx][1]*factor;
+// 			raft_matrix_element(xr, i, j) = out[idx][0]/(2*pi);
+// 			raft_matrix_element(xi, i, j) = out[idx][1]/(2*pi);
+		}
+	}
+        //fftw_cleanup_threads();
+	fftw_free(out);
+	std::cout<<"iFFT_2D succeed"<<std::endl;
+}
+
+raft_matrix ifftw_2d_c2r(raft_matrix &xr, raft_matrix &xi, int threads)
+{
+	std::cout<<"iFFT_2D_c2r started"<<std::endl;
 	int Nx = xr.columns;
 	int Ny = xr.lines;
-// 	std::cout<<"Nx="<<Nx<<"; N="<<Ny<<std::endl;
+	std::cout<<"Nx="<<Nx<<"; N="<<Ny<<std::endl;
 
-	fftw_complex *in, *out;
+	fftw_complex *in;
 	in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*Nx*Ny);
-	out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*Nx*Ny);
+	
+	
+	double *out = (double*)fftw_malloc(sizeof(double)*Nx*(2*Ny+1));
 	int idx; 
 	for(int i=0; i<Nx; i++) {
 		for(int j=0; j<Ny; j++) {
@@ -1379,15 +1663,15 @@ void ifftw_2d(raft_matrix &xr, raft_matrix &xi, int threads)
 	}
 	fftw_init_threads();
 	fftw_plan_with_nthreads(threads);
-	fftw_plan p = fftw_plan_dft_2d(Nx, Ny, in, out, FFTW_BACKWARD, FFTW_ESTIMATE);
+	fftw_plan p = fftw_plan_dft_c2r_2d(Nx, Ny, in, out, FFTW_ESTIMATE);
 	fftw_execute(p); /* repeat as needed */
 	fftw_destroy_plan(p);
 	fftw_free(in);
+	raft_matrix res_r = raft_matrix_create(Nx, 2*Ny+1);
 	for(int i=0; i<Nx; i++) {
-		for(int j=0; j<Ny; j++) {
+		for(int j=0; j<2*Ny+1; j++) {
 			idx = j*Nx + i;
-			raft_matrix_element(xr, i, j) = out[idx][0];
-			raft_matrix_element(xi, i, j) = out[idx][1];
+			raft_matrix_element(res_r, i, j) = out[idx];
 		}
 	}
 	fftw_free(out);
@@ -1396,18 +1680,18 @@ void ifftw_2d(raft_matrix &xr, raft_matrix &xi, int threads)
 
 void fftw_2d(raft_matrix &xr, raft_matrix &xi, int threads)
 {
-// 	std::cout<<"iFFT_2D started"<<std::endl;
-	int Nx = xr.columns;
-	int Ny = xr.lines;
-// 	std::cout<<"Nx="<<Nx<<"; N="<<Ny<<std::endl;
+	std::cout<<"FFT_2D started"<<std::endl;
+	int N = xr.lines;
+	int M = xr.columns;
+// 	std::cout<<"N="<<N<<"; N="<<M<<std::endl;
 
 	fftw_complex *in, *out;
-	in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*Nx*Ny);
-	out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*Nx*Ny);
+	in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*N*M);
+	out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*N*M);
 	int idx; 
-	for(int i=0; i<Nx; i++) {
-		for(int j=0; j<Ny; j++) {
-			idx = j*Nx + i;
+	for(int j=0; j<M; j++) {
+		for(int i=0; i<N; i++) {
+			idx = j*N + i;
 			in[idx][0] = raft_matrix_element(xr, i, j);	
 			in[idx][1] = raft_matrix_element(xi, i, j);	
 
@@ -1415,646 +1699,29 @@ void fftw_2d(raft_matrix &xr, raft_matrix &xi, int threads)
 	}
 	fftw_init_threads();
 	fftw_plan_with_nthreads(threads);
-	fftw_plan p = fftw_plan_dft_2d(Nx, Ny, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
+	fftw_plan p = fftw_plan_dft_2d(N, M, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
 	fftw_execute(p); /* repeat as needed */
 	fftw_destroy_plan(p);
 	fftw_free(in);
-	for(int i=0; i<Nx; i++) {
-		for(int j=0; j<Ny; j++) {
-			idx = j*Nx + i;
-			raft_matrix_element(xr, i, j) = out[idx][0];
-			raft_matrix_element(xi, i, j) = out[idx][1];
+	double factor = 1.0/(N*M);
+	for(int j=0; j<M; j++) {
+		for(int i=0; i<N; i++) {
+			idx = j*N + i;
+			raft_matrix_element(xr, i, j) = out[idx][0]*factor;
+			raft_matrix_element(xi, i, j) = out[idx][1]*factor;
 		}
 	}
 	fftw_free(out);
-// 	std::cout<<"iFFT_2D succeed"<<std::endl;
-}
-
-raft_image raft_kernel_lp_create(raft_image source, double acc)
-{
-	int Nt = source.data.columns;
-	int Ns = source.data.lines;
-	raft_image res = source;
-	res.data = raft_matrix_create(Ns, Nt);
-
-	double t0 = std::min(source.tl_x, source.br_x);
-	double t1 = std::max(source.tl_x, source.br_x);
-	double dt = (t1-t0)/Nt;
-
-	double r0 = std::min(source.tl_y, source.br_y);
-	double r1 = std::max(source.tl_y, source.br_y);
-	double dr = (r1-r0)/Nt;
-
-	double t=t0;
-	r0 = -std::max(source.tl_y, source.br_y);
-	double r  = r0;
-
-// 	std::cout<<"Creating kernel: t0="<<t0<<"; t1="<<t1<<"; dt="<<dt<<std::endl;
-// 	std::cout<<"r0="<<r0<<"; r1="<<r1<<"; dr="<<dr<<std::endl;
-
-
-	for(int i=0; i<Ns; i++) {
-		for(int j=0; j<Nt; j++) {
-			double arg = fabs(exp(r)*cos(t) - 1);
-			if(arg< acc) raft_matrix_element(res.data, j, i) = 1/acc;
-			r+=dr;
-		}
-		r=r0;
-		t+=dt;
-	}
-	return res;
-}
-
-raft_image raft_straight_kernel_lp_create(raft_image source, double acc)
-{
-	int Nt = source.data.columns;
-	int Ns = source.data.lines;
-	raft_image res = source;
-	res.data = raft_matrix_create(Ns, Nt);
-
-	double t0 = std::min(source.tl_x, source.br_x);
-	double t1 = std::max(source.tl_x, source.br_x);
-	double dt = (t1-t0)/Nt;
-
-	double r0 = std::min(source.tl_y, source.br_y);
-	double r1 = std::max(source.tl_y, source.br_y);
-	double dr = (r1-r0)/Nt;
-
-	double t  = t0;
-	double r  = r0;
-
-	//std::cout<<"Creating kernel: t0="<<t0<<"; t1="<<t1<<"; dt="<<dt<<std::endl;
-	//std::cout<<"r0="<<r0<<"; r1="<<r1<<"; dr="<<dr<<std::endl;
-	for(int i=0; i<Ns; i++) {
-		for(int j=0; j<Nt; j++) {
-			double arg = (cos(pi*t/180) - exp(r))*(cos(pi*t/180) - exp(r));
-			if(arg< acc*acc) raft_matrix_element(res.data, j, i) = 1/acc;
-			r+=dr;
-		}
-		r=r0;
-		t+=dt;
-	}
-	return res;
-}
-
-
-/////////////// MULTITHREAD IMPLEMNENTATIONS //////////////////////////
-
-// Semi polar -> Cartesian (For miqueles algorithm it takes two arrays at the time 
-inline void sp2c_miqueles_worker( 	raft_image source_r, 
-					raft_image source_i,
-					raft_image res_r, 
-					raft_image res_i, 
-					double t0, 
-					double s0, 
-					double x0, 
-					double y0,
-					double dx, 
-					double dy, 
-					double ds, 
-					double dt, 
-					int col1, 
-					int col2
- )
-{
-	int Nt = source_r.data.columns;
-	int Ns = source_r.data.lines;
-	int Nx = res_r.data.lines;
-	int idxt_min, idxt_maj, idxs_min, idxs_maj;
-	double s, t, t_min, t_maj, s_min, s_maj, 
-	       f11, f12, f21, f22, fr,
-	       f11i, f12i, f21i, f22i, fi;
-	double y = y0;
-	double x = x0;
-// 	double factor = 1.0/(ds*dt);
-	double factor = 1;
-	for(int j=col1; j<col2; j++) {
-		for(int i=0; i<Nx; i++) {
-			s = sqrt(x*x + y*y);
-			t = acos(x/s);
-			t = (y>0) ? t :  - t;
-
-			idxt_min = floor((t-t0)/dt);
-			idxt_maj = idxt_min + 1;
-			t_min = t0 + dt*idxt_min;
-			t_maj = t_min + dt;
-
-			idxs_min = floor((s - s0)/ds);
-			idxs_maj = idxs_min + 1;
-			s_min = s0 + ds*idxs_min;
-			s_maj = s_min + ds;
-
-			if(idxs_maj > Ns-1 || idxt_maj > Nt-1 ||
-					idxs_min < 0 || idxt_min < 0) {
-				x += dx;
-				continue;
-			}
-
-			f11 = raft_matrix_element(source_r.data, idxs_min, idxt_min);
-			f12 = raft_matrix_element(source_r.data, idxs_maj, idxt_min);
-			f21 = raft_matrix_element(source_r.data, idxs_min, idxt_maj);
-			f22 = raft_matrix_element(source_r.data, idxs_maj, idxt_maj);
-		
-			f11i = raft_matrix_element(source_i.data, idxs_min, idxt_min);
-			f12i = raft_matrix_element(source_i.data, idxs_maj, idxt_min);
-			f21i = raft_matrix_element(source_i.data, idxs_min, idxt_maj);
-			f22i = raft_matrix_element(source_i.data, idxs_maj, idxt_maj);
-			
-			fr =  f11*(t_maj - t)*(s_maj - s) + 
-					f21*(t - t_min)*(s_maj - s) + 
-					f12*(t_maj - t)*(s - s_min) + 
-					f22*(t - t_min)*(s - s_min) ;
-			fi =  f11i*(t_maj - t)*(s_maj - s) + 
-					f21i*(t - t_min)*(s_maj - s) + 
-					f12i*(t_maj - t)*(s - s_min) + 
-					f22i*(t - t_min)*(s - s_min) ;
-			fr *= factor;
-			fi *= factor;
-			raft_matrix_element(res_r.data, i, j) = fr;
-			raft_matrix_element(res_i.data, i, j) = fi;
-			x += dx;
-		}
-		x = x0;
-		y += dy;
-	}
-}
-
-void sp2c_miqueles(raft_image source_r, raft_image source_i,
-		raft_image &res_r, raft_image &res_i, int Nx, int Ny, int nthreads)
-{
-	int Nt = source_r.data.columns;
-	double t0 = std::min(source_r.br_x, source_r.tl_x);
-	double t1 = std::max(source_r.br_x, source_r.tl_x);
-	double dt = (t1-t0)/Nt;
-	
-	int Ns = source_r.data.lines;
-	double s0 = std::min(source_r.br_y, source_r.tl_y);
-	double s1 = std::max(source_r.br_y, source_r.tl_y);
-	double ds = (s1-s0)/Ns;
-	
-	double x0 = -s1;
-	double x1 =  s1;
-	double y0 = -s1;
-	double y1 =  s1;
-
-	double dx = s1*2/Nx;
-	double dy = s1*2/Ny;
-
-// 	std::cout<<"___________ semi-polar 2 cartesian interpolation ________"<<std::endl;
-// 	std::cout<<"old size: Ns="<<Ns<<"; Nt="<<Nt<<std::endl;
-// 	std::cout<<"new size: Nx="<<Nx<<"; Ny="<<Ny<<std::endl;
-// 	std::cout<<"s0="<<s0<<"; s1="<<s1<<"; ds="<<ds<<std::endl;
-// 	std::cout<<"t0="<<t0<<"; t1="<<t1<<"; dt="<<dt<<std::endl;
-// 	std::cout<<"x0="<<x0<<"; x1="<<x1<<"; dx="<<dx<<std::endl;
-// 	std::cout<<"y0="<<y0<<"; y1="<<y1<<"; dy="<<dy<<std::endl;
-// 
-	res_r.data = raft_matrix_create(Ny, Nx);
-	res_i.data = raft_matrix_create(Ny, Nx);
-
-	// Make sure we do not have too many or too little threads:
-	nthreads = ( nthreads <= Ny ) ? nthreads : Ny;
-	nthreads = ( nthreads > 0 ) ? nthreads : 1;
-	
-	// Base number of columns per thread:
-	int base_ncolumns( Ny/ nthreads );
-	// Remainder, i.e., number of threads with an extra column:
-	int remainder_ncolumns( Ny % nthreads );
-	// Current starting_line for worker thread:
-	int cur_starting_column( 0 );
-
-	// Create working threads:
-	std::vector< std::thread > threads;
-	threads.reserve( nthreads );
-	int cur_thread = 0;
-	//std::cout<<"ntreads="<< nthreads<<"; base_ncolumns="<<base_ncolumns<<"; remainder_ncolumns="<<remainder_ncolumns<<std::endl;
-	for ( ; cur_thread < nthreads; ++cur_thread )
-	{
-		double y0_cur = y0 + cur_starting_column*dy; 
-		int cur_ncolumns( base_ncolumns + ( cur_thread < remainder_ncolumns ) );
-		//std::cout<<"add thr for cur_starting_column="<<cur_starting_column<<"; cur_ncolumns="<<cur_ncolumns<<std::endl;
-		std::thread thread =  std::thread( sp2c_miqueles_worker,
-					     source_r, 
-					     source_i, 
-					     res_r,
-					     res_i,
-					     t0, s0, x0, y0_cur, 
-					     dx, dy, ds, dt, 
-					     cur_starting_column,
-					     cur_starting_column + cur_ncolumns
-					    );
-
-		threads.push_back(move(thread));
-		cur_starting_column += cur_ncolumns;
-	}
-
-	// Wait for threads to finish the job:
-	for ( auto& thread : threads )
-		if ( thread.joinable() )
-			thread.join();
-
-	res_r.tl_x = x0;
-	res_r.tl_y = y1;
-	res_r.br_x = x1;
-	res_r.br_y = y0;
-	res_i.tl_x = x0;
-	res_i.tl_y = y1;
-	res_i.br_x = x1;
-	res_i.br_y = y0;
-}
-
-// Log-polar -> Cartesian
-inline void lp2c_worker(raft_image source, 
-			raft_image res, 
-			double t0, 
-			double r0, 
-			double x0, 
-			double y0,
-			double dx, 
-			double dy, 
-			double dr, 
-			double dt, 
-			int col1, 
-			int col2
-			)
-{
-	int Nt = source.data.columns;
-	int Nr = source.data.lines;
-	int Nx = res.data.lines;
-	int idxt_min, idxt_maj, idxr_min, idxr_maj;
-	double s, r, t, t_min, t_maj, r_min, r_maj, 
-	       f11, f12, f21, f22, factor, fr;
-
-
-	double x = x0;
-	double y = y0;
-
-	factor = 1.0/dt*dr/2;
-
-	for(int j=col1; j<col2; j++) {
-		for(int i=0; i<Nx; i++) {
-			s = sqrt(x*x + y*y);
-			r = log(s);
-			t = acos(x/s);
-			t = (y>0) ? t :  - t;
-			
-			idxt_min = floor((t-t0)/dt);
-			idxt_maj = idxt_min + 1;
-			t_min = t0 + dt*idxt_min;
-			t_maj = t_min + dt;
-
-			idxr_min = floor((r - r0)/dr);
-			idxr_maj = idxr_min + 1;
-			r_min = r0 + dr*idxr_min;
-			r_maj = r_min + dr;
-
-			if(idxr_maj > Nr-1 || idxt_maj > Nt ||
-					idxr_min < 0 || idxt_min < 0) {
-				x += dx;
-				continue;
-			}
-
-			f11 = raft_matrix_element(source.data, idxr_min, idxt_min);
-			f12 = raft_matrix_element(source.data, idxr_maj, idxt_min);
-			f21 = raft_matrix_element(source.data, idxr_min, idxt_maj);
-			f22 = raft_matrix_element(source.data, idxr_maj, idxt_maj);
-		
-			fr =  f11*(t_maj - t)*(r_maj - r) + 
-					f21*(t - t_min)*(r_maj - r) + 
-					f12*(t_maj - t)*(r - r_min) + 
-					f22*(t - t_min)*(r - r_min) ;
-			fr = fr*factor;
-			raft_matrix_element(res.data, i, j) = fr;
-			x += dx;
-		}
-		x = x0;
-		y += dy;
-	}
-}
-
-raft_image lp2c_mt(raft_image source, int Nx, int Ny, int nthreads)
-{
-	int Nt = source.data.columns;
-	double t0 = std::min(source.br_x, source.tl_x);
-	double t1 = std::max(source.br_x, source.tl_x);
-	double dt = (t1-t0)/Nt;
-	
-	int Nr = source.data.lines;
-	double r0 = std::min(source.br_y, source.tl_y);
-	double r1 = std::max(source.br_y, source.tl_y);
-	double dr = (r1-r0)/Nr;
-
-	double s1 = exp(r1); 
-	double x0 =  -s1;
-	double x1 =   s1;
-	double y0 =  -s1;
-	double y1 =   s1;
-
-	double dx = s1*2/Nx;
-	double dy = s1*2/Ny;
-
-	//std::cout<<"___________ log-polar 2 cartesian interpolation ________"<<std::endl;
-	//std::cout<<"old size: Nr="<<Nr<<"; Nt="<<Nt<<std::endl;
-	//std::cout<<"new size: Nx="<<Nx<<"; Ny="<<Ny<<std::endl;
-	//std::cout<<"r0="<<r0<<"; r1="<<r1<<"; dr="<<dr<<std::endl;
-	//std::cout<<"t0="<<t0<<"; t1="<<t1<<"; dt="<<dt<<std::endl;
-	//std::cout<<"x0="<<x0<<"; x1="<<x1<<"; dx="<<dx<<std::endl;
-	//std::cout<<"y0="<<y0<<"; y1="<<y1<<"; dy="<<dy<<std::endl;
-
-
-	raft_image res;
-	res.data = raft_matrix_create(Ny, Nx);
-	
-	// Make sure we do not have too many or too little threads:
-	nthreads = ( nthreads <= Ny ) ? nthreads : Ny;
-	nthreads = ( nthreads > 0 ) ? nthreads : 1;
-	
-	// Base number of columns per thread:
-	int base_ncolumns( Ny/ nthreads );
-	// Remainder, i.e., number of threads with an extra column:
-	int remainder_ncolumns( Ny % nthreads );
-	// Current starting_line for worker thread:
-	int cur_starting_column( 0 );
-
-	// Create working threads:
-	std::vector< std::thread > threads;
-	threads.reserve( nthreads );
-	int cur_thread = 0;
-	for ( ; cur_thread < nthreads; ++cur_thread )
-	{
-		double y0_cur = y0 + cur_starting_column*dy; 
-		int cur_ncolumns( base_ncolumns + ( cur_thread < remainder_ncolumns ) );
-		std::thread thread =  std::thread( lp2c_worker,
-					     source, 
-					     res,
-					     t0, r0, x0, y0_cur, 
-					     dx, dy, dr, dt, 
-					     cur_starting_column,
-					     cur_starting_column + cur_ncolumns
-					    );
-
-		threads.push_back(move(thread));
-		cur_starting_column += cur_ncolumns;
-	}
-
-	// Wait for threads to finish the job:
-	for ( auto& thread : threads )
-		if ( thread.joinable() )
-			thread.join();
-
-	res.tl_x = x0;
-	res.tl_y = y0;
-	res.br_x = x1;
-	res.br_y = y1;
-
-// 	std::cout<<"lp2c suceed"<<std::endl;
-	return res;
-}
-
-// Semi polar -> log-polar
-
-inline void sp2lp_worker(raft_image source, 
-			raft_image res, 
-			double r0, 
-			double s0, 
-			double s1,
-			double dr,
-			double ds, 
-			int col1, 
-			int col2
-			)
-{
-	int Nt = source.data.columns;
-	int Ns = source.data.lines;
-	int Nr = res.data.lines;
-
-	double r = r0;
-	double s, s_min, s_maj, f1, f2, f_res;
-	int i_min, i_maj;
-	for(int j = col1; j<col2; j++) {
-		for(int i=0; i<Nr; ++i) {
-			s = exp(r);
-			if(s>s1) {
-// 				std::cout<<"@!!!!!"<<std::endl;
-				r+=dr;
-				continue;
-			}
-			i_min = floor((s - s0)/ds);
-			i_maj = i_min + 1; 
-			s_min = s0 + i_min*ds;
-			s_maj = s_min + ds; 
-			
-			if(i_maj > Ns-1 || i_min < 0) {
-				r += dr;
-				continue;
-			}
-			
-			f1 = raft_matrix_element(source.data, i_min, j);
-			f2 = raft_matrix_element(source.data, i_maj, j);
-		
-			f_res = f2*(s - s_min) + f1*(s_maj - s);
-			f_res = f_res/ds;
-			
-			raft_matrix_element(res.data, i, j) = f_res;
-			r+=dr;
-		}
-		r = r0;
-	}
-}
-
-raft_image sp2lp_mt(raft_image source, double Nr, double r0, int nthreads)
-{
-	int Nt = source.data.columns;
-	int Ns = source.data.lines;
-	raft_image res = source;
-	res.data = raft_matrix_create(Nr, Nt);
-	double s0 = std::min(source.tl_y, source.br_y);
-	double s1 = std::max(source.tl_y, source.br_y);
-	double ds = (s1 - s0)/Ns; 
-	double r1 = log(s1);
-	double dr = (r1 - r0)/Nr;
-
-// 	std::cout<<"__________Interpolating from semi-polar to log-polar system________"<<std::endl;
-// 	std::cout<<"old sizes: Nt="<<Nt<<"; Ns="<<Ns<<std::endl;
-// 	std::cout<<"new sizes: Nt="<<Nt<<"; Nr="<<Nr<<std::endl; 
-// 	std::cout<<"s1="<<s1<<"; ds="<<ds<<std::endl;
-// 	std::cout<<"r0="<<r0<<"; r1="<<r1;
-// 	std::cout<<"; dr="<<dr<<std::endl;
-
-	// Make sure we do not have too many or too little threads:
-	nthreads = ( nthreads <= Nt ) ? nthreads : Nt;
-	nthreads = ( nthreads > 0 ) ? nthreads : 1;
-	
-	// Base number of columns per thread:
-	int base_ncolumns( Nt/ nthreads );
-	// Remainder, i.e., number of threads with an extra column:
-	int remainder_ncolumns( Nt % nthreads );
-	// Current starting_line for worker thread:
-	int cur_starting_column( 0 );
-
-	// Create working threads:
-	std::vector< std::thread > threads;
-	threads.reserve( nthreads );
-	int cur_thread = 0;
-	for ( ; cur_thread < nthreads; ++cur_thread )
-	{
-		int cur_ncolumns( base_ncolumns + ( cur_thread < remainder_ncolumns ) );
-		std::thread thread =  std::thread( sp2lp_worker,
-					     source, 
-					     res,
-					     r0, s0, s1, 
-					     dr, ds, 
-					     cur_starting_column,
-					     cur_starting_column + cur_ncolumns
-					    );
-
-		threads.push_back(move(thread));
-		cur_starting_column += cur_ncolumns;
-	}
-
-	// Wait for threads to finish the job:
-	for ( auto& thread : threads )
-		if ( thread.joinable() )
-			thread.join();
-	res.tl_y = r0;
-	res.br_y = r1;
-// 	std::cout<<"interpolation p2lp succeed"<<std::endl;
-	return res; 
-}
-
-// Bilinear interpolation to any sizes Nx, Ny
-
-inline void bl_interpolate_worker(raft_image source, 
-			raft_image res, 
-			double x0, 
-			double y0,
-			double y0_cur,
-			double old_dx,
-			double old_dy,
-			double dx,
-			double dy, 
-			int col1, 
-			int col2
-			)
-{
-	int old_Nx = source.data.lines;
-	int old_Ny = source.data.columns;
-	int Nx = res.data.lines;
-
-	double x = x0;
-	double y = y0_cur; 
-
-	int i_min, i_maj, j_min, j_maj;
-	double x_min, x_maj, y_min, y_maj, f_res, f11, f12, f21, f22, tmp;
-	tmp = old_dx*old_dy;
-// 	std::cout<<"_________bl_interpolate starts____________"<<std::endl;
-// 	std::cout<<"old_size: "<<old_Nx<<" X "<<old_Ny;
-// 	std::cout<<"; new size: "<<Nx<<" X "<<Ny<<std::endl;
-	for(int j=col1; j<col2; ++j) {
-		for(int i=0; i<Nx; ++i) {
-			i_min = floor((x - x0)/old_dx);
-			j_min = floor((y - y0)/old_dy);
-			i_maj = i_min + 1;
-			j_maj = j_min + 1;
-
-			x_min = x0 + i_min*old_dx;
-			y_min = y0 + j_min*old_dy;
-
-			x_maj = x_min+old_dx;
-			y_maj = y_min+old_dy;
-
-			if((j_maj > old_Ny-1) || (j_min < 0) || 
-					(i_maj > old_Nx - 1) || (i_min<0)) {
-				x+=dx;
-				continue;
-			}
-
-			f11 = raft_matrix_element(source.data, i_min, j_min);
-			f12 = raft_matrix_element(source.data, i_min, j_maj);
-			f21 = raft_matrix_element(source.data, i_maj, j_min);
-			f22 = raft_matrix_element(source.data, i_maj, j_maj);
-			f_res =  f11*(x_maj - x)*(y_maj - y) + 
-					f21*(x - x_min)*(y_maj - y) + 
-					f12*(x_maj - x)*(y - y_min) + 
-					f22*(x - x_min)*(y - y_min) ;
-			f_res = f_res/tmp;
-			raft_matrix_element(res.data, i, j) = f_res;
-			x+=dx;
-		}
-		x = x0;
-		y+=dy;
-	}
-}
-
-raft_image bl_interpolate_mt(raft_image source, int Nx, int Ny, int nthreads)
-{
-	int old_Nx = source.data.lines;
-	int old_Ny = source.data.columns;
-
-	double x0 =std::min(source.tl_x, source.br_x); 
-	double y0 =std::min(source.tl_y, source.br_y); 
-	double x1 =std::max(source.tl_x, source.br_x); 
-	double y1 =std::max(source.tl_y, source.br_y); 
-	double old_dx = (x1-x0)/old_Nx;
-	double old_dy = (y1-y0)/old_Ny;
-	double dx = (x1-x0)/Nx;
-	double dy = (y1-y0)/Ny;
-	raft_image res;
-	res.data = raft_matrix_create(Nx, Ny);
-
-	// Make sure we do not have too many or too little threads:
-	nthreads = ( nthreads <= Ny ) ? nthreads : Ny;
-	nthreads = ( nthreads > 0 ) ? nthreads : 1;
-	
-	// Base number of columns per thread:
-	int base_ncolumns( Ny/ nthreads );
-	// Remainder, i.e., number of threads with an extra column:
-	int remainder_ncolumns( Ny % nthreads );
-	// Current starting_line for worker thread:
-	int cur_starting_column( 0 );
-
-	// Create working threads:
-	std::vector< std::thread > threads;
-	threads.reserve( nthreads );
-	int cur_thread = 0;
-	for ( ; cur_thread < nthreads; ++cur_thread )
-	{
-		double y0_cur = y0 + cur_starting_column*dy; 
-		int cur_ncolumns( base_ncolumns + ( cur_thread < remainder_ncolumns ) );
-		std::thread thread =  std::thread( bl_interpolate_worker,
-					     source, 
-					     res,
-					     x0, y0, y0_cur, 
-					     old_dx, old_dy, dx, dy, 
-					     cur_starting_column,
-					     cur_starting_column + cur_ncolumns
-					    );
-
-		threads.push_back(move(thread));
-		cur_starting_column += cur_ncolumns;
-	}
-
-	// Wait for threads to finish the job:
-	for ( auto& thread : threads )
-		if ( thread.joinable() )
-			thread.join();
-
-
-	res.tl_x = source.tl_x;
-	res.tl_y = source.tl_y;
-	res.br_x = source.br_x;
-	res.br_y = source.br_y;
-// 	std::cout<<"________bl_interpolation succeed___________"<<std::endl;
-	return res;
+	std::cout<<"FFT_2D succeed"<<std::endl;
 }
 
 
 
 
 
+ 	
 
-
-
-
+// Sinogram transformation with moving the source (Radon shift property, polar coords)
 raft_image mo_sino(raft_image source, double dx, double dy, int Ns)
 {
 	double k = sqrt(dx*dx+dy*dy);
@@ -2069,10 +1736,10 @@ raft_image mo_sino(raft_image source, double dx, double dy, int Ns)
 	double t1 = source.br_x;
 	double dt = (t1 - t0)/Nt;
 
-	//std::cout<<"__________ Moving the origin on the sinogram ________"<<std::endl;
-	//std::cout<<"sizes: Nt="<<Nt<<"; Ns="<<Ns<<std::endl;
-	//std::cout<<"k="<<k<<"; old_s1="<<old_s1<<"; s1="<<s1<<"; ds="<<ds<<std::endl;
-	//std::cout<<"t0="<<t0<<"; t1="<<t1<<"; dt="<<dt<<std::endl;
+	std::cout<<"__________ Moving the origin on the sinogram ________"<<std::endl;
+	std::cout<<"sizes: Nt="<<Nt<<"; Ns="<<Ns<<std::endl;
+	std::cout<<"k="<<k<<"; old_s1="<<old_s1<<"; s1="<<s1<<"; ds="<<ds<<std::endl;
+	std::cout<<"t0="<<t0<<"; t1="<<t1<<"; dt="<<dt<<std::endl;
 	double s = s0;
 	double t = t0;
 	int i_min, i_maj;
@@ -2115,7 +1782,66 @@ raft_image mo_sino(raft_image source, double dx, double dy, int Ns)
 	res.br_x = t1;
 	res.tl_y = s1;
 	res.br_y = s0;
-	//std::cout<<"_________mo_sino succeed__________"<<std::endl;
+	std::cout<<"_________mo_sino succeed__________"<<std::endl;
 	return res;
 
 }
+
+// Simple moving in Cartesian coordinates
+raft_image mo_dec(raft_image source, double dist_x, double dist_y)
+{
+	// Size 
+	int Nx = source.data.lines;  	
+	int Ny = source.data.columns;
+	// Corners
+	double x0 = source.tl_x;
+	double x1 = source.br_x;
+	double y0 = source.br_y;
+	double y1 = source.tl_y;
+	// Mesh step
+	double dx = (x1 - x0)/Nx;
+	double dy = (y1 - y0)/Ny;
+	// Number of pixels for moving 
+	int di = dist_x/dx;
+	int dj = dist_y/dy;
+	// Result image
+	raft_image res;
+	res.data = raft_matrix_create(Nx, Ny);
+
+	res.tl_x = x0;
+	res.br_x = x1;
+	res.tl_y = y1;
+	res.br_y = y0;
+
+	std::cout<<"_____ mo_dec: x0="<<x0<<"; x1="<<x1<<"; y0="<<y0<<"; y1="<<y1<<std::endl;
+	std::cout<<"dx="<<dx<<"; dy="<<dy<<"; di="<<di<<"; dj="<<dj<<std::endl;
+
+	int old_i, old_j;
+	double val;
+	for(int i=0; i<Nx; i++) {
+		for(int j=0; j<Ny; j++) {
+			old_i = i-di;
+			old_j = j-dj;
+			if(old_i > Nx-1 || old_j >Ny-1 || old_i<0 || old_j < 0 ) {
+				val = 0;
+			} else {
+				val = raft_matrix_element(source.data, old_i, old_j);
+			}
+			raft_matrix_element(res.data, i, j) = val;
+		}
+	}
+
+	return res;
+}
+
+
+
+
+
+
+
+
+
+
+
+
