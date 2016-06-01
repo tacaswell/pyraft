@@ -9,8 +9,17 @@ from distutils.extension import Extension
 from distutils.command.build_ext import build_ext
 import subprocess
 import numpy
+import sys
 
+##########################################################
 
+compile_xfct=0
+
+if '--xfct' in sys.argv:
+    compile_xfct = 1
+    print('Compiling XFCT functions with GSL & Confuse')
+    sys.argv.remove('--xfct')
+    
 # Set Python package requirements for installation.
 install_requires = [
             'numpy>=1.8.0',
@@ -53,8 +62,11 @@ def locate_cuda():
             return None
         home = os.path.dirname(os.path.dirname(nvcc))
 
-    
+   
     check = pjoin(home, 'lib')
+
+    print check
+
     if not os.path.exists(check):
 	cudaconfig = {'home':home, 'nvcc':nvcc,
         	      'include': pjoin(home, 'include'),
@@ -69,8 +81,8 @@ def locate_cuda():
         if not os.path.exists(v):
             print ( 'The CUDA %s path could not be located in %s' % (k, v))
     return cudaconfig
-CUDA = locate_cuda()
 
+CUDA = locate_cuda()
 
 # enforce these same requirements at packaging time
 import pkg_resources
@@ -84,25 +96,65 @@ for requirement in install_requires:
         print (msg)
         raise (pkg_resources.DistributionNotFound)
 
-########################################################
-if CUDA:
-	raft_codes = set(glob.glob('raft/raft_*.c*'))
+#########################################
+# set XFCT libraries @ pyraft/ratypes.py
+
+import shutil
+
+if compile_xfct:
+    with open("pyraft/raftypes.py", "wt") as fout:
+        with open("pyraft/raftypes_basis.py", "rt") as fin:
+            for line in fin:
+                fout.write(line.replace('#XFCT_LIBS', 'libgsl=ctypes.CDLL( ctypes.util.find_library( "lgsl" ), mode=ctypes.RTLD_GLOBAL )'+str('\n')+'libgslcblas = ctypes.CDLL( ctypes.util.find_library( "lgslcblas" ), mode=ctypes.RTLD_GLOBAL )'+str('\n')+'libconfuse  = ctypes.CDLL( ctypes.util.find_library( "lconfuse" ), mode=ctypes.RTLD_GLOBAL)'))
 else:
-	raft_codes = set(glob.glob('raft/raft_*.c*'))-set(glob.glob('raft/*.cu'))
+    shutil.copyfile("pyraft/raftypes_basis.py", "pyraft/raftypes.py")
+
+
+########################################################
+
+if CUDA:
+	if compile_xfct:
+		raft_codes = list( set(glob.glob('raft/raft_*.c*')) | set(glob.glob('xfct/*.c')) )	 
+	else:
+		raft_codes = set(glob.glob('raft/raft_*.c*'))
+
+else:
+	if compile_xfct:
+		raft_codes = list( (set(glob.glob('raft/raft_*.c*'))-set(glob.glob('raft/*.cu'))) | set(glob.glob('xfct/*.c')) )
+	else:
+		raft_codes = set(glob.glob('raft/raft_*.c*'))-set(glob.glob('raft/*.cu'))
+
 
 # Create reconstruction shared-library.
 if CUDA:
-	ext_raft = Extension(name='pyraft.lib.libraft',
-		             sources=list(raft_codes),
-		             library_dirs=[CUDA['lib']],
-		             libraries=['cudart'],
-		             runtime_library_dirs=[CUDA['lib']],
-		             extra_compile_args={'gcc': ['-pedantic','-std=c++0x'],
-		                                 'nvcc': ['-Xcompiler','-use_fast_math', '--ptxas-options=-v', '-c', '--compiler-options', '-fPIC']},
-		             extra_link_args=['-std=c++0x','-lfftw3_threads','-lfftw3','-lm','-lblas','-lpthread'],		
-		             include_dirs = [ CUDA['include']])
+	if compile_xfct:
+            ext_raft = Extension(name='pyraft.lib.libraft',
+                                 sources=list(raft_codes),
+                                 library_dirs=[CUDA['lib']],
+                                 libraries=['cudart'],
+                                 runtime_library_dirs=[CUDA['lib']],
+                                 extra_compile_args={'gcc': ['-pedantic','-std=c++0x'],
+                                                     'nvcc': ['-Xcompiler','-use_fast_math', '--ptxas-options=-v', '-c', '--compiler-options', '-fPIC']},
+                                 extra_link_args=['-std=c++0x','-lfftw3_threads','-lfftw3','-lm','-lblas','-lpthread','-lgsl','-lgslcblas','-lconfuse'],		
+                                 include_dirs = [ CUDA['include'], ])
+        else:
+            ext_raft = Extension(name='pyraft.lib.libraft',
+                                 sources=list(raft_codes),
+                                 library_dirs=[CUDA['lib']],
+                                 libraries=['cudart'],
+                                 runtime_library_dirs=[CUDA['lib']],
+                                 extra_compile_args={'gcc': ['-pedantic','-std=c++0x'],
+                                                     'nvcc': ['-Xcompiler','-use_fast_math', '--ptxas-options=-v', '-c', '--compiler-options', '-fPIC']},
+                                 extra_link_args=['-std=c++0x','-lfftw3_threads','-lfftw3','-lm','-lblas','-lpthread'],		
+                                 include_dirs = [ CUDA['include'], ])
 else:
-	ext_raft = Extension(name='pyraft.lib.libraft',
+    if compile_xfct:
+        ext_raft = Extension(name='pyraft.lib.libraft',
+		             sources=list(raft_codes),
+		             extra_compile_args={'gcc': ['-pedantic','-std=c++0x']},
+		             extra_link_args=['-std=c++0x','-lfftw3_threads','-lfftw3','-lm','-lblas','-lpthread','-lgsl','-lgslcblas','-lconfuse'])
+    else:
+        ext_raft = Extension(name='pyraft.lib.libraft',
 		             sources=list(raft_codes),
 		             extra_compile_args={'gcc': ['-pedantic','-std=c++0x']},
 		             extra_link_args=['-std=c++0x','-lfftw3_threads','-lfftw3','-lm','-lblas','-lpthread'])
@@ -169,12 +221,12 @@ setup(
       # since the package has c code, the egg cannot be zipped
     zip_safe=False,    
 
-    author='Eduardo X. Miqueles - Elias S.Helou - Nikolay Koshev - Rafael F.C.Vescovi',
+    author='Eduardo X. Miqueles - Elias S.Helou - Nikolay Koshev - Rafael F.C.Vescovi - Joao C. Cerqueira',
     author_email='eduardo.miqueles@lnls.br',
     
     description='Reconstructions Algorithms For Tomography',
     keywords=['tomography', 'reconstruction', 'imaging'],
-    url='http://www.raftist.com',
+    url='http://www.',
     download_url='',
     
     license='BSD',
@@ -193,6 +245,7 @@ setup(
                  'Programming Language :: Python :: 3.0',
                  'Programming Language :: C',
                  'Programming Language :: C++']
+    
 )
 
 

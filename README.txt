@@ -5,19 +5,26 @@ Authors:
 
 a) Eduardo X. Miqueles		LNLS/CNPEM
 b) Elias S. Helou		ICMC/USP
-c) Nikolay Koshev		LNLS/CNPEM
+c) Nikolay Koshev		ICMC-LNLS/CNPEM
 
 Contributors:
 
-- Rafael F.C Vescovi		LNLS/CNPEM
+- Gilberto Martinez Jr		FEEC/PUCC
 - João Carlos Cerqueira		FEEC/UNICAMP
-- Hugo H. Slepicka			BNL
+- Hugo H. Slepicka		BNL
+- Rafael F.C Vescovi		LNLS/CNPEM
 
 
 -----------------------------------------------------
 Install:
 
-sudo -E python setup.py install
+  => Standard CT:
+
+  sudo -E python setup.py install
+
+  => Include XFCT functions (dependencies: GSL/Confuse):
+ 
+  sudo -E python setup.py install --xfct 
 
 Uninstall
 

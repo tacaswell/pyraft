@@ -13,9 +13,7 @@ nthreads = multiprocessing.cpu_count()
 
 # Load required libraies:
 
-libgsl=ctypes.CDLL( ctypes.util.find_library( "lgsl" ), mode=ctypes.RTLD_GLOBAL )
-libgslcblas = ctypes.CDLL( ctypes.util.find_library( "lgslcblas" ), mode=ctypes.RTLD_GLOBAL )
-libconfuse  = ctypes.CDLL( ctypes.util.find_library( "lconfuse" ), mode=ctypes.RTLD_GLOBAL)
+#XFCT_LIBS
 
 
 libstdcpp = ctypes.CDLL( ctypes.util.find_library( "stdc++" ), mode=ctypes.RTLD_GLOBAL )

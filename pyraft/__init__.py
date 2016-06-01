@@ -13,6 +13,8 @@ from .inversion import *
 from .iterative import *
 from .filters import *
 from .phantom import *
+from .coordinates import *
+from .xfct import *
 
 from .iterative import *
 
@@ -23,11 +25,12 @@ except:
 	print("Matplotlib not found, not using plot functions")
 
 
+'''
 try:
 	import mayavi
 	from .viswrapper import *
 except:
 	print("Mayavi not found, not using render functions")
-
+'''
 
 

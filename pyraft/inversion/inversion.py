@@ -18,8 +18,8 @@ def fbp(*args):
     N = sino.shape[0]
     
     filt_sino = lowpassino_fbp(sino)
-    
-    img = backprojection(filt_sino , shape=[N, N], method=radon_method.BST)
+
+    img = backprojection(filt_sino , shape=[N, N], method=radon_method.ANDERSON)
 
     return img 
 

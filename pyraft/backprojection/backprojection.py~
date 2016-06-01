@@ -251,7 +251,7 @@ def backprojection_gpu(sino, shape=(256, 256), **kwargs):
     img = numpy.zeros(img_size*img_size).astype('float32')
     img_p = img.ctypes.data_as(POINTER(c_float))
 
-    libraft.raft_backprojection_slantstack_gpu(img_p, sino_p, img_size, nrays, nviews)
+    libraft.raft_backprojection_slantstack_gpu(img_p, sino_p, img_size, rays, angles)
 
     img_final = img.reshape([img_size,img_size]).astype('float64')
 

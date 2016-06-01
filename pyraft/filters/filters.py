@@ -10,8 +10,23 @@ from ..raftypes import *
 
 ''' Filtered sinogram for FBP '''
 
-def lowpassino_fbp(*args):
-       
+def lowpassino_fbp(*args):   
+    '''
+    if len(args) == 0:
+        print ("error!")
+        return 0
+
+    sino = args[0]
+      
+    # Compute discrete Backprojection:
+    SINO = make_RAFT_IMAGE(sino, sino.top_left, sino.bottom_right)
+   
+    libraft.raft_filter1d_ramp(1.0, SINO, 4)
+    
+    return sino
+    '''
+
+         
     if len(args) == 0:
         print ("error!")
         return 0
@@ -29,11 +44,14 @@ def lowpassino_fbp(*args):
     R = int(sino.shape[0])
     V = int(sino.shape[1])
     
+    L = 1e-6
+
     dt = (t[R - 1] - t[0]) / (R - 1)
     wc = 1 / (2 * dt)
     w = numpy.linspace(-wc, wc, R)
     h = numpy.abs(w) * numpy.cos(numpy.pi * w * dt)
-    
+    #h = numpy.abs(w) / (1.0 + L * numpy.abs(w) - 4.0 * numpy.pi * L * numpy.abs(w)**3.0)    
+ 
     G = numpy.fft.fftshift(numpy.transpose(numpy.kron(numpy.ones((V, 1)), h)))
     B = numpy.fft.fft(sino, axis=0) 
     
@@ -48,6 +66,50 @@ def lowpassino_fbp(*args):
     W.bottom_right = sino.bottom_right
 
     return W
+       
+
+''' Regularized Filtered sinogram for FBP '''
+
+def lowpassino_reg_fbp(*args):   
+             
+    if len(args) == 0:
+        print ("error!")
+        return 0
+
+    sino = args[0]
+            
+    tmin = sino.bottom_right[1]
+    tmax = sino.top_left[1]
+
+    t = numpy.linspace(tmin, tmax, sino.shape[0])
+    
+    if len(args) > 1:
+        L = args[1]  # tyhkonov regularization parameter !!!
+
+    R = int(sino.shape[0])
+    V = int(sino.shape[1])
+    
+
+    dt = (t[R - 1] - t[0]) / (R - 1)
+    wc = 1 / (2 * dt)
+    w = numpy.linspace(-wc, wc, R)
+    h = numpy.abs(w) / (1.0 + L * numpy.abs(w)**2.0)
+ 
+    G = numpy.fft.fftshift(numpy.transpose(numpy.kron(numpy.ones((V, 1)), h)))
+    B = numpy.fft.fft(sino, axis=0) 
+    
+    C = B * G
+
+    #---	
+    
+    D = numpy.fft.ifft(C, axis=0) 
+    
+    W = image(D.real)	
+    W.top_left = sino.top_left
+    W.bottom_right = sino.bottom_right
+
+    return W
+
 
 
 ##############

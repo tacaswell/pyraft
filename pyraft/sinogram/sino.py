@@ -163,7 +163,8 @@ class radon_method:
    SLANTSTACK = 2,
    HIERARCHICAL = 3,
    BST = 4,
-   ANDERSON = 5
+   ANDERSSON = 5,
+   ANDERSSONPB = 6
 
 ###############
 # |  pyraft  |#
