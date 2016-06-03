@@ -154,7 +154,7 @@ def backprojection(sino, trans, fluor, shape=(64, 64)):
 ##############
 
 def fbp360(sino, shape=(256, 256)):
-   """Computes the Radon transform using old RAFT function"""
+   """Computes the FBP inversion using an old RAFT function"""
   
    # Create pyraft.img to hold backprojection:
    back = image(shape)
@@ -167,4 +167,56 @@ def fbp360(sino, shape=(256, 256)):
    libraft.oldraft_fbp360(BACK, SINO)
    
    return back
+
+##############
+# |  pyraft  |#
+# | function |#
+##############
+
+def getFluorFromSpec(table, s, x, y, a, c):
+   """Extract Fluorescence sinograms from Spec XFCT file """
+
+   t     = int(table.shape[1])
+   shape = [a,x]  #transposed sinogram 
+
+   sino = image(shape)
+   SINO = make_RAFT_IMAGE(sino)
+
+   TABLE = make_RAFT_IMAGE(table)
+
+   libraft.getFluorFromSpec(SINO, TABLE, ctypes.c_int(s), ctypes.c_int(x), ctypes.c_int(y), ctypes.c_int(a), ctypes.c_int(t), ctypes.c_int(c) )
+
+   sino.top_left = [0, 1.]
+   sino.bottom_right = [numpy.pi, -1.0]
+
+   sino = numpy.transpose(sino)
+
+   return sino 
+
+
+##############
+# |  pyraft  |#
+# | function |#
+##############
+
+def getTransFromSpec(table, s, x, y, a, c):
+   """Extract Transmission sinograms from Spec XFCT file """
+
+   t     = int(table.shape[1])
+   shape = [a,x]  #transposed sinogram 
+
+   sino = image(shape)
+   SINO = make_RAFT_IMAGE(sino)
+
+   TABLE = make_RAFT_IMAGE(table)
+
+   libraft.getTransFromSpec(SINO, TABLE, ctypes.c_int(s), ctypes.c_int(x), ctypes.c_int(y), ctypes.c_int(a), ctypes.c_int(t), ctypes.c_int(c) )
+
+   sino.top_left = [0, 1.]
+   sino.bottom_right = [numpy.pi, -1.0]
+ 
+   sino = numpy.transpose(sino)
+
+   return sino
+
 
