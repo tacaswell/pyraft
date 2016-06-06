@@ -15,6 +15,18 @@ import shutil
 
 ##########################################################
 
+compile_cuda = 1
+
+
+if '--no-cuda' in sys.argv:
+
+    compile_cuda = 0
+    sys.argv.remove('--no-cuda')
+
+   
+#
+#
+
 compile_xfct=0
 
 if '--xfct' in sys.argv:
@@ -107,7 +119,10 @@ def locate_cuda():
             print ( 'The CUDA %s path could not be located in %s' % (k, v))
     return cudaconfig
 
-CUDA = locate_cuda()
+if compile_cuda:
+   CUDA = locate_cuda()
+else:
+   CUDA = None
 
 # enforce these same requirements at packaging time
 import pkg_resources

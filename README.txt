@@ -26,6 +26,10 @@ Install:
  
   sudo -E python setup.py install --xfct 
 
+  => Compile without CUDA
+
+  sudo python setup.py install --no-cuda
+
 Uninstall
 
 sudo pip uninstall pyraft
