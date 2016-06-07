@@ -113,8 +113,8 @@ def backprojection_plan( sino_shape=(256,180), shape=(256, 256), padding=2, meth
    elif method == radon_method.ANDERSSON:
      
       # sinogram @ polar coordinates
-      nx = shape_res[0]
-      ny = shape_res[1]
+      nx = shape[0]
+      ny = shape[1]
 
       prays = int(nrays/2)
       pviews = nviews*2
