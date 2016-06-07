@@ -48,7 +48,7 @@ def make_fourier_slice_radon_transp( sino, shape = None, sino_zp_factor = 1.5, n
          raise ValueError( 'Invalid sinogram t range. Must be ( -1.0, 1.0 )' )
    if ( img.top_left != ( -1.0, 1.0 ) ) or \
       ( img.bottom_right != ( 1.0, -1.0 ) ):
-         print img.top_left, img.bottom_right
+         print( img.top_left, img.bottom_right )
          raise ValueError( 'Invalid image range. Must be ( -1.0, 1.0 ) x ( -1.0, 1.0 ).' )
    if ( img.shape[ 0 ] != sino.shape[ 0 ] ) or \
       ( img.shape[ 1 ] != sino.shape[ 0 ] ):
