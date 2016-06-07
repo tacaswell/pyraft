@@ -195,15 +195,15 @@ def zpSino(sino):
  
 def rollSino(sino, c):
  
-    N = sino.shape[1]
-    
-    new = numpy.zeros(sino.shape)
-    for j in range(N): 
-	y = numpy.flipud(sino[:,j])
-	w = translate(y, c, -1.0, 1.0)
-	new[:,j] = numpy.flipud(w)
- 
-    return new
+	N = sino.shape[1]
+
+	new = numpy.zeros(sino.shape)
+	for j in range(N): 
+		y = numpy.flipud(sino[:,j])
+		w = translate(y, c, -1.0, 1.0) 
+		new[:,j] = numpy.flipud(w)
+
+	return new
  
 ###########################################################################
 #
@@ -216,22 +216,18 @@ def rollSino(sino, c):
 #
 
 def matrix_A(k, th):
-
-    V = len(th)
-    
-    if k == 0:
-        A = numpy.ones((V,1))
-    else:
-	c = numpy.cos(th)
-	s = numpy.sin(th)
-    	A = numpy.zeros((V,k+1))
-
-    	for j in range(0,k+1):
-        	vec = (c**(k-j)) * (s**(j)) * nchoosek(k,j)
+	V = len(th)
+	if k == 0:
+		A = numpy.ones((V,1))
+	else:
+		c = numpy.cos(th)
+		s = numpy.sin(th)
+		A = numpy.zeros((V,k+1))
+	for j in range(0,k+1):
+		vec = (c**(k-j)) * (s**(j)) * nchoosek(k,j)
 		vec.shape = [V,]
-   		A[:,j] = vec
-
-    return A
+		A[:,j] = vec
+	return A
 
 #
 # auxiliary function: compute the constant vector b[k]
@@ -272,15 +268,14 @@ def func4_matrix_diag(beta, k, V):
     diff_diag_ = k*beta**(k-1)
  
     for j in range(1,k+1):
-	temp_diag = numpy.ones((j+1,)) * nchoosek(k,k-j) * (beta**(k-j))
-	diag_ = numpy.r_[ temp_diag, diag_ ] 
-
-        if (k-j) == 0:
-		temp_diag = numpy.zeros((j+1,))
-		diff_diag_ = numpy.r_[ temp_diag, diff_diag_ ]
-	else:
-		temp_diag = numpy.ones((j+1,)) * nchoosek(k,k-j) * (k-j) * (beta**(k-j-1))
-		diff_diag_ = numpy.r_[ temp_diag, diff_diag_ ]
+	    temp_diag = numpy.ones((j+1,)) * nchoosek(k,k-j) * (beta**(k-j))
+	    diag_ = numpy.r_[ temp_diag, diag_ ] 
+	    if (k-j) == 0:
+		    temp_diag = numpy.zeros((j+1,))
+		    diff_diag_ = numpy.r_[ temp_diag, diff_diag_ ]
+	    else:
+		    temp_diag = numpy.ones((j+1,)) * nchoosek(k,k-j) * (k-j) * (beta**(k-j-1))
+		    diff_diag_ = numpy.r_[ temp_diag, diff_diag_ ]
  	
     D  = numpy.diag(diag_)
     dD = numpy.diag(diff_diag_)  
@@ -299,20 +294,15 @@ def func4_matrix_diag(beta, k, V):
 #
 
 def func4_matrix_blocks(k, t0, tf, V):
-    
     th = numpy.linspace(0, 180, V, endpoint=False) * (numpy.pi/180)
     th.shape = [len(th), 1]
-    
     A = matrix_A(0, th)
- 
     for j in range(1,k+1):
-	temp_A = matrix_A(j, th)
-	A = numpy.c_[ temp_A , A ]
-
+        temp_A = matrix_A(j, th)
+        A = numpy.c_[temp_A, A]
     dim = A.shape[1]
     S = numpy.zeros([V, dim-1])
     S[:,:] = A[:,0:dim-1]
-        
     return A, S
 
 #
@@ -598,7 +588,7 @@ def offset2(sino):
  
     newsino = numpy.zeros( sino.shape )
     for j in range(0,sino.shape[1]): 
-	newsino[:,j] = numpy.roll( sino[:,j], int(offset_arr[j]) )
+        newsino[:,j] = numpy.roll( sino[:,j], int(offset_arr[j]) )
 
     return c, offset, newsino
 
@@ -764,10 +754,10 @@ def offset6(sino, k, *args):
 
     if len(args) and len(argum)==1:
 	#MAX_NPIXELS = int(argum[0]*R)
-	RAYMAX = float(argum[0])
+        RAYMAX = float(argum[0])
     else:
 	#MAX_NPIXELS = int(0.25*R)
-	RAYMAX = 0.5
+        RAYMAX = 0.5
 
     epsilon = 1e-8
     t0 = -1.0
@@ -802,14 +792,14 @@ def offset6(sino, k, *args):
         
 
     if len(args)>0 and len(argum)==2:
-	initial = argum[1]
-	z0[0,0] = initial
-    	z0[1,0] = cxmass
-    	z0[2,0] = cymass
+        initial = argum[1]
+        z0[0,0] = initial
+        z0[1,0] = cxmass
+        z0[2,0] = cymass
     else:
-	z0[0,0] = -beta0
-    	z0[1,0] = cxmass
-    	z0[2,0] = cymass
+        z0[0,0] = -beta0
+        z0[1,0] = cxmass
+        z0[2,0] = cymass
 
     solution = scipy_minimize(func4, z0, args=(params,), constraints=cons)#, bounds=bnds) # method='SLSQP')
 
@@ -824,37 +814,30 @@ def offset6(sino, k, *args):
     if k > 1:
 
     	for m in range(2,k+1):
+            dimension = m+1
+            b = func4_data(sino, m, t0, tf)
+            D, _, _, _ = func4_matrix_diag(beta, m, V)
+            A_ = matrix_A(m, th)
+            A = numpy.c_[ A_, A ]
+            M = numpy.dot(A, D)	
+            z0 = numpy.zeros((dimension,1)) 
 
-    		dimension = m+1
+            # -- optimization using scipy
 
-	    	b = func4_data(sino, m, t0, tf)
+            params = (sino, epsilon, t0, tf, m, M, b, y, beta)
+            
+            solution = scipy_minimize(func5, z0, args=(params,))
 
-		D, _, _, _ = func4_matrix_diag(beta, m, V)
-	
-	    	A_ = matrix_A(m, th)
-	 
-		A = numpy.c_[ A_, A ]
-		
-		M = numpy.dot(A, D)
-		
-		z0 = numpy.zeros((dimension,1)) 
+            y_ = solution.x
+            
+            y_.shape = [dimension, 1]
 
-	    	# -- optimization using scipy
+            y = numpy.r_[ y_, y]
 
-	    	params = (sino, epsilon, t0, tf, m, M, b, y, beta)
-	    	
-	    	solution = scipy_minimize(func5, z0, args=(params,))
-
-		y_ = solution.x
-		
-		y_.shape = [dimension, 1]
-
-		y = numpy.r_[ y_, y]
-
-		## --- moment matrix
-		
-		for l in range(0,m+1):
-                	moments[m-l][l] = y[l]
+            ## --- moment matrix
+            
+            for l in range(0,m+1):
+                    moments[m-l][l] = y[l]
     
 
     offset = get_offset( beta, -1.0, 1.0, sino.shape[0])
@@ -882,12 +865,10 @@ def centering( sino, maxoffset, *args):
     if len(args)>0:
 	#comparison between input values: given by user and correlation
 	#choice: the one giving lower value for the objective function.
-	
-    	argum = args[0]
-
+        argum = args[0]
         shift_ = numpy.zeros([2,])
-	retorno = numpy.zeros([2,])
-	fun = numpy.zeros([2,])
+        retorno = numpy.zeros([2,])
+        fun = numpy.zeros([2,])
 
         starting = numpy.array([argum, correlation(sino)])      
 
@@ -895,7 +876,7 @@ def centering( sino, maxoffset, *args):
         retorno[1],shift_[1],_ = offset3( sino, maxoffset, starting[1])
 
         fun[0] = consistency( [retorno[0]], (sino, 1e-8, -1.,1.))
-	fun[1] = consistency( [retorno[1]], (sino, 1e-8, -1.,1.))	
+        fun[1] = consistency( [retorno[1]], (sino, 1e-8, -1.,1.))	
 
         idx = numpy.argmin(fun)
 
