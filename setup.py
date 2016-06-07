@@ -66,11 +66,11 @@ def locate_cuda():
     check = pjoin(home, 'lib')
 
     if not os.path.exists(check):
-	cudaconfig = {'home':home, 'nvcc':nvcc,
+       cudaconfig = {'home':home, 'nvcc':nvcc,
         	      'include': pjoin(home, 'include'),
                       'lib': pjoin(home, 'lib64')}
     else:
-	cudaconfig = {'home':home, 'nvcc':nvcc,
+       cudaconfig = {'home':home, 'nvcc':nvcc,
         	      'include': pjoin(home, 'include'),
                       'lib': pjoin(home, 'lib')}
 
@@ -125,7 +125,7 @@ else:
 
 # Create reconstruction shared-library.
 if CUDA:
-	if compile_xfct:
+    if compile_xfct:
             ext_raft = Extension(name='pyraft.lib.libraft',
                                  sources=list(raft_codes),
                                  library_dirs=[CUDA['lib']],
@@ -135,7 +135,7 @@ if CUDA:
                                                      'nvcc': ['-Xcompiler','-use_fast_math', '--ptxas-options=-v', '-c', '--compiler-options', '-fPIC']},
                                  extra_link_args=['-std=c++0x','-lfftw3_threads','-lfftw3','-lm','-lblas','-lpthread','-lgsl','-lgslcblas','-lconfuse'],		
                                  include_dirs = [ CUDA['include'], ])
-        else:
+    else:
             ext_raft = Extension(name='pyraft.lib.libraft',
                                  sources=list(raft_codes),
                                  library_dirs=[CUDA['lib']],
