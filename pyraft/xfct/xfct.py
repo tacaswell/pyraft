@@ -141,9 +141,52 @@ def backprojection(sino, trans, fluor, shape=(64, 64)):
    TRANS = make_RAFT_IMAGE(trans, trans.top_left, trans.bottom_right)
    FLUOR = make_RAFT_IMAGE(fluor, fluor.top_left, fluor.bottom_right)
 
-   # Expect.Maximization for XFCT inversion:
+   # Weighted Backprojction for XFCT:
    
    libraft.oldraft_backprojection_xfct(REC, SINO, TRANS, FLUOR )
+   
+   return rec
+
+##############
+# |  pyraft  |#
+# | function |#
+##############
+
+def fbp360(sino, shape=(256, 256)):
+   """Computes the FBP inversion using an old RAFT function"""
+  
+   # Create pyraft.img to hold backprojection:
+   back = image(shape)
+   BACK = make_RAFT_IMAGE(back, back.top_left, back.bottom_right)
+
+   SINO = make_RAFT_IMAGE(sino, sino.top_left, sino.bottom_right)
+
+   # Filtered backprojection Backprojection transform 
+   # 0-360 degrees (slant-stack with pthreads):
+   
+   libraft.oldraft_fbp360(BACK, SINO)
+   
+   return back
+
+
+##############
+# |  pyraft  |#
+# | function |#
+##############
+
+def em360(sino, shape=(256, 256), niter=4):
+   """Computes the FBP inversion using an old RAFT function"""
+  
+   # Create pyraft.img to hold backprojection:
+   rec = image(shape)
+   REC = make_RAFT_IMAGE(rec, rec.top_left, rec.bottom_right)
+
+   SINO = make_RAFT_IMAGE(sino, sino.top_left, sino.bottom_right)
+
+   # Expectation Maximization for CT (emission model) 
+   # 0-360 degrees (slant-stack with pthreads):
+   
+   libraft.oldraft_em360(REC, SINO, ctypes.c_int(niter))
    
    return rec
 
@@ -153,18 +196,51 @@ def backprojection(sino, trans, fluor, shape=(64, 64)):
 # | function |#
 ##############
 
-def fbp360(sino, shape=(256, 256)):
-   """Computes the Radon transform using old RAFT function"""
-  
-   # Create pyraft.img to hold backprojection:
-   back = image(shape)
-   BACK = make_RAFT_IMAGE(back, back.top_left, back.bottom_right)
+def getFluorFromSpec(table, s, x, y, a, c):
+   """Extract Fluorescence sinograms from Spec XFCT file """
 
-   SINO = make_RAFT_IMAGE(sino, sino.top_left, sino.bottom_right)
+   t     = int(table.shape[1])
+   shape = [a,x]  #transposed sinogram 
 
-   # Backprojection transform (slant-stack with pthreads):
-   
-   libraft.oldraft_fbp360(BACK, SINO)
-   
-   return back
+   sino = image(shape)
+   SINO = make_RAFT_IMAGE(sino)
+
+   TABLE = make_RAFT_IMAGE(table)
+
+   libraft.getFluorFromSpec(SINO, TABLE, ctypes.c_int(s), ctypes.c_int(x), ctypes.c_int(y), ctypes.c_int(a), ctypes.c_int(t), ctypes.c_int(c) )
+
+   sino.top_left = [0., 1.]
+   sino.bottom_right = [numpy.pi, -1.0]
+
+   # sino: (rays, angles)
+   sino = numpy.transpose(sino) 
+
+   return sino 
+
+
+##############
+# |  pyraft  |#
+# | function |#
+##############
+
+def getTransFromSpec(table, s, x, y, a, c):
+   """Extract Transmission sinograms from Spec XFCT file """
+
+   t     = int(table.shape[1])
+   shape = [a,x]  #transposed sinogram 
+
+   sino = image(shape)
+   SINO = make_RAFT_IMAGE(sino)
+
+   TABLE = make_RAFT_IMAGE(table)
+
+   libraft.getTransFromSpec(SINO, TABLE, ctypes.c_int(s), ctypes.c_int(x), ctypes.c_int(y), ctypes.c_int(a), ctypes.c_int(t), ctypes.c_int(c) )
+
+   sino.top_left = [0, 1.]
+   sino.bottom_right = [numpy.pi, -1.0]
+ 
+   sino = numpy.transpose(sino)
+
+   return sino
+
 

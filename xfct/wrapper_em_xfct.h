@@ -13,6 +13,9 @@ void oldraft_em_xfct(	raft_image rec,
 			raft_image fluor,
 			int niter);	
 
+void oldraft_em360(raft_image rec,
+		   raft_image sino, 
+		   int niter);	
 
 #ifdef __cplusplus
 } //extern "C" {

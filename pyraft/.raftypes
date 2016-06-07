@@ -242,6 +242,10 @@ try:
     
     libraft.oldraft_fbp360.argtypes = [RAFT_IMAGE, RAFT_IMAGE]
     libraft.oldraft_fbp360.restypes = None
+
+    libraft.getFluorFromSpec.argtypes = [RAFT_IMAGE, RAFT_IMAGE, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+
+    libraft.getFluorFromSpec.restypes = None
 except:
     print ('PyRAfT: No XFCT Functions!!')
     

@@ -145,6 +145,8 @@ void oldraft_fbp360(raft_image fbp, raft_image sino)
   nviews = raft_matrix_ncolumns(sino.data);
   nrays  = raft_matrix_nlines(sino.data);
 
+  fprintf(stderr,"%d %d %d\n\n",size,nviews,nrays);
+
   max =  sqrt(2.0)/2.0;
   min = -sqrt(2.0)/2.0;
 
@@ -154,10 +156,10 @@ void oldraft_fbp360(raft_image fbp, raft_image sino)
   rec = gsl_vector_alloc(size*size);
   p = gsl_vector_alloc(nrays*nviews);
 
-  for(i=0; i < nviews; i++){
-    for(j=0; j < nrays; j++){
-	x = raft_matrix_element(sino.data, j, i);
-	raft_scan_set_projection(&data, p, i, j, x);	  	
+  for(i=0; i < nrays; i++){
+    for(j=0; j < nviews; j++){
+	x = raft_matrix_element(sino.data, i, j);
+	raft_scan_set_projection(&data, p, j, i, x);	  	
     }
   }
   
@@ -175,12 +177,15 @@ void oldraft_fbp360(raft_image fbp, raft_image sino)
     }
   }
 
-  
+  fprintf(stderr,"=> Recon:done!\n");
+
   gsl_vector_free(rec);
   gsl_vector_free(p);
   
   raft_scan_free_data(&data);
   raft_backp_workspace_free(&workspace);
 }
+
+
 
 

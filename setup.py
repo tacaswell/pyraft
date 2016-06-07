@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 import os
 from os.path import join as pjoin
 import warnings
@@ -10,24 +11,62 @@ from distutils.command.build_ext import build_ext
 import subprocess
 import numpy
 import sys
+import shutil
 
 ##########################################################
+
+compile_cuda = 1
+
+
+if '--no-cuda' in sys.argv:
+
+    compile_cuda = 0
+    sys.argv.remove('--no-cuda')
+
+   
+#
+#
 
 compile_xfct=0
 
 if '--xfct' in sys.argv:
     compile_xfct = 1
-    print('Compiling XFCT functions with GSL & Confuse')
+    print('Compiling (Deprecated) RafT XFCT functions with GSL & Confuse')
     sys.argv.remove('--xfct')
-    
-# Set Python package requirements for installation.
-install_requires = [
-            'numpy>=1.8.0',
-            'scipy>=0.14.0',
-            'h5py>=2.0',
-	    'pynfft>=1.3.2'
-            ]
 
+
+# Set Python package requirements for installation.   
+
+compile_nfft=1
+
+if '--no-nfft' in sys.argv:
+
+    compile_nfft = 0
+
+    install_requires = [
+        'numpy>=1.8.0',
+        'scipy>=0.14.0',
+    ]
+
+    sys.argv.remove('--no-nfft')
+
+    shutil.copyfile("pyraft/sinogram/.init", "pyraft/sinogram/__init__.py")
+
+else:
+    install_requires = [
+        'numpy>=1.8.0',
+        'scipy>=0.14.0',
+        'pynfft>=1.3.2'
+    ]
+
+    #add sino_nfft to package
+    with open("pyraft/sinogram/__init__.py", "wt") as fout:
+        with open("pyraft/sinogram/.init", "rt") as fin:
+            for line in fin:
+                fout.write(line.replace('#NFFT', 'from .sino_nfft import make_fourier_slice_radon_transp as plan_radon_fs'))
+
+
+########
 
 def find_in_path(name, path):
     "Find a file in a search path"
@@ -80,7 +119,10 @@ def locate_cuda():
             print ( 'The CUDA %s path could not be located in %s' % (k, v))
     return cudaconfig
 
-CUDA = locate_cuda()
+if compile_cuda:
+   CUDA = locate_cuda()
+else:
+   CUDA = None
 
 # enforce these same requirements at packaging time
 import pkg_resources
@@ -97,15 +139,13 @@ for requirement in install_requires:
 #########################################
 # set XFCT libraries @ pyraft/ratypes.py
 
-import shutil
-
 if compile_xfct:
     with open("pyraft/raftypes.py", "wt") as fout:
-        with open("pyraft/raftypes_basis.py", "rt") as fin:
+        with open("pyraft/.raftypes", "rt") as fin:
             for line in fin:
                 fout.write(line.replace('#XFCT_LIBS', 'libgsl=ctypes.CDLL( ctypes.util.find_library( "lgsl" ), mode=ctypes.RTLD_GLOBAL )'+str('\n')+'libgslcblas = ctypes.CDLL( ctypes.util.find_library( "lgslcblas" ), mode=ctypes.RTLD_GLOBAL )'+str('\n')+'libconfuse  = ctypes.CDLL( ctypes.util.find_library( "lconfuse" ), mode=ctypes.RTLD_GLOBAL)'))
 else:
-    shutil.copyfile("pyraft/raftypes_basis.py", "pyraft/raftypes.py")
+    shutil.copyfile("pyraft/.raftypes", "pyraft/raftypes.py")
 
 
 ########################################################
@@ -207,7 +247,7 @@ class custom_build_ext(build_ext):
 # Main setup configuration.
 setup(
     name='pyraft',
-    version=open('VERSION').read().strip(),
+    version = open('VERSION').read().strip(),
     
     packages = find_packages(),
     include_package_data = True,
@@ -219,7 +259,7 @@ setup(
       # since the package has c code, the egg cannot be zipped
     zip_safe=False,    
 
-    author='Eduardo X. Miqueles - Elias S.Helou - Nikolay Koshev - Rafael F.C.Vescovi - Joao C. Cerqueira',
+    author='Eduardo X. Miqueles - Elias S.Helou - Nikolay Koshev',
     author_email='eduardo.miqueles@lnls.br',
     
     description='Reconstructions Algorithms For Tomography',
